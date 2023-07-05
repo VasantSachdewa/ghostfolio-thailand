@@ -20,7 +20,12 @@ export class ConfigurationService {
       DATA_SOURCE_EXCHANGE_RATES: str({ default: DataSource.YAHOO }),
       DATA_SOURCE_IMPORT: str({ default: DataSource.YAHOO }),
       DATA_SOURCES: json({
-        default: [DataSource.COINGECKO, DataSource.MANUAL, DataSource.YAHOO]
+        default: [
+          DataSource.COINGECKO,
+          DataSource.MANUAL,
+          DataSource.YAHOO,
+          DataSource.FINNOMENA
+        ]
       }),
       ENABLE_FEATURE_BLOG: bool({ default: false }),
       ENABLE_FEATURE_FEAR_AND_GREED_INDEX: bool({ default: false }),

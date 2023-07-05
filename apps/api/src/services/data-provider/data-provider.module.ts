@@ -4,6 +4,7 @@ import { AlphaVantageService } from '@ghostfolio/api/services/data-provider/alph
 import { CoinGeckoService } from '@ghostfolio/api/services/data-provider/coingecko/coingecko.service';
 import { EodHistoricalDataService } from '@ghostfolio/api/services/data-provider/eod-historical-data/eod-historical-data.service';
 import { FinancialModelingPrepService } from '@ghostfolio/api/services/data-provider/financial-modeling-prep/financial-modeling-prep.service';
+import { FinnomenaService } from '@ghostfolio/api/services/data-provider/finnomena/finnomena.service';
 import { GoogleSheetsService } from '@ghostfolio/api/services/data-provider/google-sheets/google-sheets.service';
 import { ManualService } from '@ghostfolio/api/services/data-provider/manual/manual.service';
 import { RapidApiService } from '@ghostfolio/api/services/data-provider/rapid-api/rapid-api.service';
@@ -36,6 +37,7 @@ import { DataProviderService } from './data-provider.service';
     FinancialModelingPrepService,
     GoogleSheetsService,
     ManualService,
+    FinnomenaService,
     RapidApiService,
     YahooFinanceService,
     {
@@ -46,6 +48,7 @@ import { DataProviderService } from './data-provider.service';
         FinancialModelingPrepService,
         GoogleSheetsService,
         ManualService,
+        FinnomenaService,
         RapidApiService,
         YahooFinanceService
       ],
@@ -57,6 +60,7 @@ import { DataProviderService } from './data-provider.service';
         financialModelingPrepService,
         googleSheetsService,
         manualService,
+        FinnomenaService,
         rapidApiService,
         yahooFinanceService
       ) => [
@@ -64,6 +68,7 @@ import { DataProviderService } from './data-provider.service';
         coinGeckoService,
         eodHistoricalDataService,
         financialModelingPrepService,
+        FinnomenaService,
         googleSheetsService,
         manualService,
         rapidApiService,
