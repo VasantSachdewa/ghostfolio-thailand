@@ -215,6 +215,7 @@ enum DataSource {
   MANUAL
   RAPID_API
   YAHOO
+  FINNOMENA
 }
 
 enum MarketDataState {
