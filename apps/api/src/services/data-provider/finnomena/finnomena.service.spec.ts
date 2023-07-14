@@ -3,7 +3,7 @@ import { FinnomenaService } from '@ghostfolio/api/services/data-provider/finnome
 describe('FinnomenaService', () => {
   let finnomenaService: FinnomenaService;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     finnomenaService = new FinnomenaService();
   });
 

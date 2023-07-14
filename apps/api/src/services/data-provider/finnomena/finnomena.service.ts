@@ -128,11 +128,17 @@ export class FinnomenaService implements DataProviderInterface {
     return 'SCB';
   }
 
-  public async search(aQuery: string): Promise<{ items: LookupItem[] }> {
+  public async search({
+    includeIndices = false,
+    query
+  }: {
+    includeIndices?: boolean;
+    query: string;
+  }): Promise<{ items: LookupItem[] }> {
     let items: LookupItem[] = [];
     try {
       const get = bent(
-        `${this.URL}/fn4/public/api/v1/global/_search?q=${aQuery}&size=10&category=asset,knowledge&lang=en`,
+        `${this.URL}/fn4/public/api/v1/global/_search?q=${query}&size=10&category=asset,knowledge&lang=en`,
         'GET',
         'json',
         200
