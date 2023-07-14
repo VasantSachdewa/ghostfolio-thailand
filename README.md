@@ -1,6 +1,6 @@
 <div align="center">
 
-[<img src="https://avatars.githubusercontent.com/u/82473144?s=200" width="100" alt="Ghostfolio logo">](https://ghostfol.io)
+[<img src="https://avatars.githubusercontent.com/u/82473144?s=200" width="100" alt="Ghostfolio logos">](https://ghostfol.io)
 
 # Ghostfolio-Thailand
 
