@@ -1,13 +1,12 @@
 <div class="container">
   <div class="row">
     <div class="col">
-      <h3 class="d-none d-sm-block mb-3 text-center" i18n>Features</h3>
-      <div class="mb-4">
-        <p>
-          Check out the numerous features of <strong>Ghostfolio</strong> to
-          manage your wealth.
-        </p>
-      </div>
+      <h1 class="h3 line-height-1 mb-4 text-center">
+        <span class="d-none d-sm-block" i18n>Features</span>
+        <small class="text-muted" i18n>
+          Check out the numerous features of Ghostfolio to manage your wealth
+        </small>
+      </h1>
       <div class="row">
         <div class="col-xs-12 col-md-4 mb-3">
           <mat-card appearance="outlined" class="d-flex flex-column h-100">
@@ -140,10 +139,9 @@
               <div class="flex-grow-1">
                 <h4 class="align-items-center d-flex">
                   <span i18n>Portfolio Calculations</span>
-                  <gf-premium-indicator
-                    *ngIf="hasPermissionForSubscription"
-                    class="ml-1"
-                  ></gf-premium-indicator>
+                  @if (hasPermissionForSubscription) {
+                    <gf-premium-indicator class="ml-1" />
+                  }
                 </h4>
                 <p class="m-0">
                   Check the rate of return of your portfolio for
@@ -160,10 +158,9 @@
               <div class="flex-grow-1">
                 <h4 class="align-items-center d-flex">
                   <span i18n>Portfolio Allocations</span>
-                  <gf-premium-indicator
-                    *ngIf="hasPermissionForSubscription"
-                    class="ml-1"
-                  ></gf-premium-indicator>
+                  @if (hasPermissionForSubscription) {
+                    <gf-premium-indicator class="ml-1" />
+                  }
                 </h4>
                 <p class="m-0">
                   Check the allocations of your portfolio by account, asset
@@ -199,37 +196,35 @@
             </mat-card-content>
           </mat-card>
         </div>
-        <div
-          *ngIf="hasPermissionForSubscription"
-          class="col-xs-12 col-md-4 mb-3"
-        >
-          <mat-card appearance="outlined" class="d-flex flex-column h-100">
-            <mat-card-content>
-              <div class="flex-grow-1">
-                <h4 class="align-items-center d-flex">
-                  <span i18n>Market Mood</span>
-                  <gf-premium-indicator class="ml-1"></gf-premium-indicator>
-                </h4>
-                <p class="m-0">
-                  Check the current market mood (<a
-                    [routerLink]="['/resources']"
-                    >Fear & Greed Index</a
-                  >) within the app.
-                </p>
-              </div>
-            </mat-card-content>
-          </mat-card>
-        </div>
+        @if (hasPermissionForSubscription) {
+          <div class="col-xs-12 col-md-4 mb-3">
+            <mat-card appearance="outlined" class="d-flex flex-column h-100">
+              <mat-card-content>
+                <div class="flex-grow-1">
+                  <h4 class="align-items-center d-flex">
+                    <span i18n>Market Mood</span>
+                    <gf-premium-indicator class="ml-1" />
+                  </h4>
+                  <p class="m-0">
+                    Check the current market mood (<a
+                      [routerLink]="routerLinkResources"
+                      >Fear & Greed Index</a
+                    >) within the app.
+                  </p>
+                </div>
+              </mat-card-content>
+            </mat-card>
+          </div>
+        }
         <div class="col-xs-12 col-md-4 mb-3">
           <mat-card appearance="outlined" class="d-flex flex-column h-100">
             <mat-card-content>
               <div class="flex-grow-1">
                 <h4 class="align-items-center d-flex">
                   <span i18n>Static Analysis</span>
-                  <gf-premium-indicator
-                    *ngIf="hasPermissionForSubscription"
-                    class="ml-1"
-                  ></gf-premium-indicator>
+                  @if (hasPermissionForSubscription) {
+                    <gf-premium-indicator class="ml-1" />
+                  }
                 </h4>
                 <p class="m-0">
                   Identify potential risks in your portfolio with Ghostfolio
@@ -246,7 +241,8 @@
                 <h4 i18n>Multi-Language</h4>
                 <p class="m-0">
                   Use Ghostfolio in multiple languages: English, Dutch, French,
-                  German, Italian, Portuguese and Spanish are currently
+                  German, Italian,
+                  <!-- Polish, -->Portuguese, Spanish and Turkish are currently
                   supported.
                 </p>
               </div>
@@ -293,11 +289,17 @@
       </div>
     </div>
   </div>
-  <div *ngIf="!user" class="row">
-    <div class="col mt-3 text-center">
-      <a color="primary" i18n mat-flat-button [routerLink]="['/register']"
-        >Get Started</a
-      >
+  @if (!user) {
+    <div class="row">
+      <div class="col mt-3 text-center">
+        <a
+          color="primary"
+          i18n
+          mat-flat-button
+          [routerLink]="routerLinkRegister"
+          >Get Started</a
+        >
+      </div>
     </div>
-  </div>
+  }
 </div>

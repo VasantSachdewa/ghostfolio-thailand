@@ -1,30 +1,26 @@
-import { Component, HostBinding, OnDestroy, OnInit } from '@angular/core';
-import { DataService } from '@ghostfolio/client/services/data.service';
 import { TabConfiguration } from '@ghostfolio/common/interfaces';
+
+import { Component, OnDestroy, OnInit } from '@angular/core';
+import { DeviceDetectorService } from 'ngx-device-detector';
 import { Subject } from 'rxjs';
 
 @Component({
+  host: { class: 'page has-tabs' },
   selector: 'gf-admin-page',
   styleUrls: ['./admin-page.scss'],
   templateUrl: './admin-page.html'
 })
 export class AdminPageComponent implements OnDestroy, OnInit {
-  @HostBinding('class.with-info-message') get getHasMessage() {
-    return this.hasMessage;
-  }
-
-  public hasMessage: boolean;
+  public deviceType: string;
   public tabs: TabConfiguration[] = [];
 
   private unsubscribeSubject = new Subject<void>();
 
-  public constructor(private dataService: DataService) {
-    const { systemMessage } = this.dataService.fetchInfo();
-
-    this.hasMessage = !!systemMessage;
-  }
+  public constructor(private deviceService: DeviceDetectorService) {}
 
   public ngOnInit() {
+    this.deviceType = this.deviceService.getDeviceInfo().deviceType;
+
     this.tabs = [
       {
         iconName: 'reader-outline',
@@ -43,7 +39,7 @@ export class AdminPageComponent implements OnDestroy, OnInit {
       },
       {
         iconName: 'flash-outline',
-        label: $localize`Jobs`,
+        label: $localize`Job Queue`,
         path: ['/admin', 'jobs']
       },
       {

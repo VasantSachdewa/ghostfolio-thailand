@@ -1,4 +1,5 @@
 import { AccessModule } from '@ghostfolio/api/app/access/access.module';
+import { AccountBalanceService } from '@ghostfolio/api/app/account-balance/account-balance.service';
 import { AccountService } from '@ghostfolio/api/app/account/account.service';
 import { OrderModule } from '@ghostfolio/api/app/order/order.module';
 import { UserModule } from '@ghostfolio/api/app/user/user.module';
@@ -11,6 +12,7 @@ import { ImpersonationModule } from '@ghostfolio/api/services/impersonation/impe
 import { MarketDataModule } from '@ghostfolio/api/services/market-data/market-data.module';
 import { PrismaModule } from '@ghostfolio/api/services/prisma/prisma.module';
 import { SymbolProfileModule } from '@ghostfolio/api/services/symbol-profile/symbol-profile.module';
+
 import { Module } from '@nestjs/common';
 
 import { CurrentRateService } from './current-rate.service';
@@ -36,6 +38,7 @@ import { RulesService } from './rules.service';
     UserModule
   ],
   providers: [
+    AccountBalanceService,
     AccountService,
     CurrentRateService,
     PortfolioService,

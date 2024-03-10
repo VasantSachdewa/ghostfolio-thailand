@@ -1,19 +1,20 @@
+import { ConfigurationService } from '@ghostfolio/api/services/configuration/configuration.service';
 import { DataEnhancerInterface } from '@ghostfolio/api/services/data-provider/interfaces/data-enhancer.interface';
 import { Country } from '@ghostfolio/common/interfaces/country.interface';
 import { Sector } from '@ghostfolio/common/interfaces/sector.interface';
+
 import { Injectable } from '@nestjs/common';
 import { SymbolProfile } from '@prisma/client';
-import bent from 'bent';
-
-const getJSON = bent('json');
+import got from 'got';
 
 @Injectable()
 export class TrackinsightDataEnhancerService implements DataEnhancerInterface {
-  private static baseUrl = 'https://data.trackinsight.com';
+  private static baseUrl = 'https://www.trackinsight.com/data-api';
   private static countries = require('countries-list/dist/countries.json');
   private static countriesMapping = {
     'Russian Federation': 'Russia'
   };
+  private static holdingsWeightTreshold = 0.85;
   private static sectorsMapping = {
     'Consumer Discretionary': 'Consumer Cyclical',
     'Consumer Defensive': 'Consumer Staples',
@@ -21,10 +22,16 @@ export class TrackinsightDataEnhancerService implements DataEnhancerInterface {
     'Information Technology': 'Technology'
   };
 
+  public constructor(
+    private readonly configurationService: ConfigurationService
+  ) {}
+
   public async enhance({
+    requestTimeout = this.configurationService.get('REQUEST_TIMEOUT'),
     response,
     symbol
   }: {
+    requestTimeout?: number;
     response: Partial<SymbolProfile>;
     symbol: string;
   }): Promise<Partial<SymbolProfile>> {
@@ -34,29 +41,87 @@ export class TrackinsightDataEnhancerService implements DataEnhancerInterface {
       return response;
     }
 
-    const profile = await getJSON(
-      `${TrackinsightDataEnhancerService.baseUrl}/data-api/funds/${symbol}.json`
-    ).catch(() => {
-      return {};
-    });
+    let abortController = new AbortController();
 
-    const isin = profile.isin?.split(';')?.[0];
+    setTimeout(() => {
+      abortController.abort();
+    }, requestTimeout);
+
+    const profile = await got(
+      `${TrackinsightDataEnhancerService.baseUrl}/funds/${symbol}.json`,
+      {
+        // @ts-ignore
+        signal: abortController.signal
+      }
+    )
+      .json<any>()
+      .catch(() => {
+        const abortController = new AbortController();
+
+        setTimeout(() => {
+          abortController.abort();
+        }, this.configurationService.get('REQUEST_TIMEOUT'));
+
+        return got(
+          `${TrackinsightDataEnhancerService.baseUrl}/funds/${
+            symbol.split('.')?.[0]
+          }.json`,
+          {
+            // @ts-ignore
+            signal: abortController.signal
+          }
+        )
+          .json<any>()
+          .catch(() => {
+            return {};
+          });
+      });
+
+    const isin = profile?.isin?.split(';')?.[0];
 
     if (isin) {
       response.isin = isin;
     }
 
-    const holdings = await getJSON(
-      `${TrackinsightDataEnhancerService.baseUrl}/holdings/${symbol}.json`
-    ).catch(() => {
-      return getJSON(
-        `${TrackinsightDataEnhancerService.baseUrl}/holdings/${
-          symbol.split('.')?.[0]
-        }.json`
-      );
-    });
+    abortController = new AbortController();
 
-    if (holdings?.weight < 0.95) {
+    setTimeout(() => {
+      abortController.abort();
+    }, this.configurationService.get('REQUEST_TIMEOUT'));
+
+    const holdings = await got(
+      `${TrackinsightDataEnhancerService.baseUrl}/holdings/${symbol}.json`,
+      {
+        // @ts-ignore
+        signal: abortController.signal
+      }
+    )
+      .json<any>()
+      .catch(() => {
+        const abortController = new AbortController();
+
+        setTimeout(() => {
+          abortController.abort();
+        }, this.configurationService.get('REQUEST_TIMEOUT'));
+
+        return got(
+          `${TrackinsightDataEnhancerService.baseUrl}/holdings/${
+            symbol.split('.')?.[0]
+          }.json`,
+          {
+            // @ts-ignore
+            signal: abortController.signal
+          }
+        )
+          .json<any>()
+          .catch(() => {
+            return {};
+          });
+      });
+
+    if (
+      holdings?.weight < TrackinsightDataEnhancerService.holdingsWeightTreshold
+    ) {
       // Skip if data is inaccurate
       return response;
     }
@@ -111,5 +176,9 @@ export class TrackinsightDataEnhancerService implements DataEnhancerInterface {
 
   public getName() {
     return 'TRACKINSIGHT';
+  }
+
+  public getTestSymbol() {
+    return 'QQQ';
   }
 }

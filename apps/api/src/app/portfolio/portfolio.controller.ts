@@ -1,5 +1,7 @@
 import { AccessService } from '@ghostfolio/api/app/access/access.service';
+import { OrderService } from '@ghostfolio/api/app/order/order.service';
 import { UserService } from '@ghostfolio/api/app/user/user.service';
+import { HasPermissionGuard } from '@ghostfolio/api/guards/has-permission.guard';
 import {
   hasNotDefinedValuesInObject,
   nullifyValuesInObject
@@ -10,10 +12,15 @@ import { TransformDataSourceInResponseInterceptor } from '@ghostfolio/api/interc
 import { ApiService } from '@ghostfolio/api/services/api/api.service';
 import { ConfigurationService } from '@ghostfolio/api/services/configuration/configuration.service';
 import { ExchangeRateDataService } from '@ghostfolio/api/services/exchange-rate-data/exchange-rate-data.service';
-import { HEADER_KEY_IMPERSONATION } from '@ghostfolio/common/config';
+import { ImpersonationService } from '@ghostfolio/api/services/impersonation/impersonation.service';
+import {
+  DEFAULT_CURRENCY,
+  HEADER_KEY_IMPERSONATION
+} from '@ghostfolio/common/config';
 import {
   PortfolioDetails,
   PortfolioDividends,
+  PortfolioHoldingsResponse,
   PortfolioInvestments,
   PortfolioPerformanceResponse,
   PortfolioPublicDetails,
@@ -24,6 +31,7 @@ import type {
   GroupBy,
   RequestWithUser
 } from '@ghostfolio/common/types';
+
 import {
   Controller,
   Get,
@@ -47,22 +55,20 @@ import { PortfolioService } from './portfolio.service';
 
 @Controller('portfolio')
 export class PortfolioController {
-  private baseCurrency: string;
-
   public constructor(
     private readonly accessService: AccessService,
     private readonly apiService: ApiService,
     private readonly configurationService: ConfigurationService,
     private readonly exchangeRateDataService: ExchangeRateDataService,
+    private readonly impersonationService: ImpersonationService,
+    private readonly orderService: OrderService,
     private readonly portfolioService: PortfolioService,
     @Inject(REQUEST) private readonly request: RequestWithUser,
     private readonly userService: UserService
-  ) {
-    this.baseCurrency = this.configurationService.get('BASE_CURRENCY');
-  }
+  ) {}
 
   @Get('details')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
   @UseInterceptors(RedactValuesInResponseInterceptor)
   @UseInterceptors(TransformDataSourceInResponseInterceptor)
   public async getDetails(
@@ -74,6 +80,11 @@ export class PortfolioController {
   ): Promise<PortfolioDetails & { hasError: boolean }> {
     let hasDetails = true;
     let hasError = false;
+    const hasReadRestrictedAccessPermission =
+      this.userService.hasReadRestrictedAccessPermission({
+        impersonationId,
+        user: this.request.user
+      });
 
     if (this.configurationService.get('ENABLE_FEATURE_SUBSCRIPTION')) {
       hasDetails = this.request.user.subscription.type === 'Premium';
@@ -85,21 +96,15 @@ export class PortfolioController {
       filterByTags
     });
 
-    const {
-      accounts,
-      filteredValueInBaseCurrency,
-      filteredValueInPercentage,
-      hasErrors,
-      holdings,
-      platforms,
-      summary,
-      totalValueInBaseCurrency
-    } = await this.portfolioService.getDetails({
-      dateRange,
-      filters,
-      impersonationId,
-      userId: this.request.user.id
-    });
+    const { accounts, hasErrors, holdings, platforms, summary } =
+      await this.portfolioService.getDetails({
+        dateRange,
+        filters,
+        impersonationId,
+        userId: this.request.user.id,
+        withLiabilities: true,
+        withSummary: true
+      });
 
     if (hasErrors || hasNotDefinedValuesInObject(holdings)) {
       hasError = true;
@@ -108,33 +113,29 @@ export class PortfolioController {
     let portfolioSummary = summary;
 
     if (
-      impersonationId ||
+      hasReadRestrictedAccessPermission ||
       this.userService.isRestrictedView(this.request.user)
     ) {
       const totalInvestment = Object.values(holdings)
-        .map((portfolioPosition) => {
-          return portfolioPosition.investment;
+        .map(({ investment }) => {
+          return investment;
         })
         .reduce((a, b) => a + b, 0);
 
       const totalValue = Object.values(holdings)
-        .map((portfolioPosition) => {
-          return this.exchangeRateDataService.toCurrency(
-            portfolioPosition.quantity * portfolioPosition.marketPrice,
-            portfolioPosition.currency,
-            this.request.user.Settings.settings.baseCurrency
-          );
+        .filter(({ assetClass, assetSubClass }) => {
+          return assetClass !== 'CASH' && assetSubClass !== 'CASH';
+        })
+        .map(({ valueInBaseCurrency }) => {
+          return valueInBaseCurrency;
         })
         .reduce((a, b) => a + b, 0);
 
       for (const [symbol, portfolioPosition] of Object.entries(holdings)) {
-        portfolioPosition.grossPerformance = null;
         portfolioPosition.investment =
           portfolioPosition.investment / totalInvestment;
-        portfolioPosition.netPerformance = null;
-        portfolioPosition.quantity = null;
         portfolioPosition.valueInPercentage =
-          portfolioPosition.value / totalValue;
+          portfolioPosition.valueInBaseCurrency / totalValue;
       }
 
       for (const [name, { valueInBaseCurrency }] of Object.entries(accounts)) {
@@ -148,53 +149,66 @@ export class PortfolioController {
 
     if (
       hasDetails === false ||
-      impersonationId ||
+      hasReadRestrictedAccessPermission ||
       this.userService.isRestrictedView(this.request.user)
     ) {
       portfolioSummary = nullifyValuesInObject(summary, [
         'cash',
         'committedFunds',
         'currentGrossPerformance',
+        'currentGrossPerformanceWithCurrencyEffect',
         'currentNetPerformance',
+        'currentNetPerformanceWithCurrencyEffect',
+        'currentNetWorth',
         'currentValue',
-        'dividend',
+        'dividendInBaseCurrency',
         'emergencyFund',
         'excludedAccountsAndActivities',
         'fees',
+        'filteredValueInBaseCurrency',
+        'fireWealth',
+        'interest',
         'items',
         'liabilities',
-        'netWorth',
         'totalBuy',
-        'totalSell'
+        'totalInvestment',
+        'totalSell',
+        'totalValueInBaseCurrency'
       ]);
     }
 
     for (const [symbol, portfolioPosition] of Object.entries(holdings)) {
       holdings[symbol] = {
         ...portfolioPosition,
-        assetClass: hasDetails ? portfolioPosition.assetClass : undefined,
-        assetSubClass: hasDetails ? portfolioPosition.assetSubClass : undefined,
+        assetClass:
+          hasDetails || portfolioPosition.assetClass === 'CASH'
+            ? portfolioPosition.assetClass
+            : undefined,
+        assetSubClass:
+          hasDetails || portfolioPosition.assetSubClass === 'CASH'
+            ? portfolioPosition.assetSubClass
+            : undefined,
         countries: hasDetails ? portfolioPosition.countries : [],
         currency: hasDetails ? portfolioPosition.currency : undefined,
         markets: hasDetails ? portfolioPosition.markets : undefined,
+        marketsAdvanced: hasDetails
+          ? portfolioPosition.marketsAdvanced
+          : undefined,
         sectors: hasDetails ? portfolioPosition.sectors : []
       };
     }
 
     return {
       accounts,
-      filteredValueInBaseCurrency,
-      filteredValueInPercentage,
       hasError,
       holdings,
       platforms,
-      totalValueInBaseCurrency,
       summary: portfolioSummary
     };
   }
 
   @Get('dividends')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
   public async getDividends(
     @Headers(HEADER_KEY_IMPERSONATION.toLowerCase()) impersonationId: string,
     @Query('accounts') filterByAccounts?: string,
@@ -203,21 +217,37 @@ export class PortfolioController {
     @Query('range') dateRange: DateRange = 'max',
     @Query('tags') filterByTags?: string
   ): Promise<PortfolioDividends> {
+    const hasReadRestrictedAccessPermission =
+      this.userService.hasReadRestrictedAccessPermission({
+        impersonationId,
+        user: this.request.user
+      });
+
     const filters = this.apiService.buildFiltersFromQueryParams({
       filterByAccounts,
       filterByAssetClasses,
       filterByTags
     });
 
-    let dividends = await this.portfolioService.getDividends({
-      dateRange,
+    const impersonationUserId =
+      await this.impersonationService.validateImpersonationId(impersonationId);
+    const userCurrency = this.request.user.Settings.settings.baseCurrency;
+
+    const { activities } = await this.orderService.getOrders({
       filters,
-      groupBy,
-      impersonationId
+      userCurrency,
+      userId: impersonationUserId || this.request.user.id,
+      types: ['DIVIDEND']
+    });
+
+    let dividends = await this.portfolioService.getDividends({
+      activities,
+      dateRange,
+      groupBy
     });
 
     if (
-      impersonationId ||
+      hasReadRestrictedAccessPermission ||
       this.userService.isRestrictedView(this.request.user)
     ) {
       const maxDividend = dividends.reduce(
@@ -243,8 +273,35 @@ export class PortfolioController {
     return { dividends };
   }
 
+  @Get('holdings')
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
+  @UseInterceptors(RedactValuesInResponseInterceptor)
+  @UseInterceptors(TransformDataSourceInResponseInterceptor)
+  public async getHoldings(
+    @Headers(HEADER_KEY_IMPERSONATION.toLowerCase()) impersonationId: string,
+    @Query('accounts') filterByAccounts?: string,
+    @Query('assetClasses') filterByAssetClasses?: string,
+    @Query('query') filterBySearchQuery?: string,
+    @Query('tags') filterByTags?: string
+  ): Promise<PortfolioHoldingsResponse> {
+    const filters = this.apiService.buildFiltersFromQueryParams({
+      filterByAccounts,
+      filterByAssetClasses,
+      filterBySearchQuery,
+      filterByTags
+    });
+
+    const { holdings } = await this.portfolioService.getDetails({
+      filters,
+      impersonationId,
+      userId: this.request.user.id
+    });
+
+    return { holdings: Object.values(holdings) };
+  }
+
   @Get('investments')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
   public async getInvestments(
     @Headers(HEADER_KEY_IMPERSONATION.toLowerCase()) impersonationId: string,
     @Query('accounts') filterByAccounts?: string,
@@ -253,6 +310,12 @@ export class PortfolioController {
     @Query('range') dateRange: DateRange = 'max',
     @Query('tags') filterByTags?: string
   ): Promise<PortfolioInvestments> {
+    const hasReadRestrictedAccessPermission =
+      this.userService.hasReadRestrictedAccessPermission({
+        impersonationId,
+        user: this.request.user
+      });
+
     const filters = this.apiService.buildFiltersFromQueryParams({
       filterByAccounts,
       filterByAssetClasses,
@@ -268,7 +331,7 @@ export class PortfolioController {
     });
 
     if (
-      impersonationId ||
+      hasReadRestrictedAccessPermission ||
       this.userService.isRestrictedView(this.request.user)
     ) {
       const maxInvestment = investments.reduce(
@@ -305,7 +368,7 @@ export class PortfolioController {
   }
 
   @Get('performance')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
   @UseInterceptors(TransformDataSourceInResponseInterceptor)
   @Version('2')
   public async getPerformanceV2(
@@ -313,8 +376,19 @@ export class PortfolioController {
     @Query('accounts') filterByAccounts?: string,
     @Query('assetClasses') filterByAssetClasses?: string,
     @Query('range') dateRange: DateRange = 'max',
-    @Query('tags') filterByTags?: string
+    @Query('tags') filterByTags?: string,
+    @Query('withExcludedAccounts') withExcludedAccountsParam = 'false',
+    @Query('withItems') withItemsParam = 'false'
   ): Promise<PortfolioPerformanceResponse> {
+    const withExcludedAccounts = withExcludedAccountsParam === 'true';
+    const withItems = withItemsParam === 'true';
+
+    const hasReadRestrictedAccessPermission =
+      this.userService.hasReadRestrictedAccessPermission({
+        impersonationId,
+        user: this.request.user
+      });
+
     const filters = this.apiService.buildFiltersFromQueryParams({
       filterByAccounts,
       filterByAssetClasses,
@@ -325,25 +399,45 @@ export class PortfolioController {
       dateRange,
       filters,
       impersonationId,
+      withExcludedAccounts,
+      withItems,
       userId: this.request.user.id
     });
 
     if (
-      impersonationId ||
+      hasReadRestrictedAccessPermission ||
       this.request.user.Settings.settings.viewMode === 'ZEN' ||
       this.userService.isRestrictedView(this.request.user)
     ) {
       performanceInformation.chart = performanceInformation.chart.map(
-        ({ date, netPerformanceInPercentage, totalInvestment, value }) => {
+        ({
+          date,
+          netPerformanceInPercentage,
+          netWorth,
+          totalInvestment,
+          value
+        }) => {
           return {
             date,
             netPerformanceInPercentage,
-            totalInvestment: new Big(totalInvestment)
-              .div(performanceInformation.performance.totalInvestment)
-              .toNumber(),
-            valueInPercentage: new Big(value)
-              .div(performanceInformation.performance.currentValue)
-              .toNumber()
+            netWorthInPercentage:
+              performanceInformation.performance.currentNetWorth === 0
+                ? 0
+                : new Big(netWorth)
+                    .div(performanceInformation.performance.currentNetWorth)
+                    .toNumber(),
+            totalInvestment:
+              performanceInformation.performance.totalInvestment === 0
+                ? 0
+                : new Big(totalInvestment)
+                    .div(performanceInformation.performance.totalInvestment)
+                    .toNumber(),
+            valueInPercentage:
+              performanceInformation.performance.currentValue === 0
+                ? 0
+                : new Big(value)
+                    .div(performanceInformation.performance.currentValue)
+                    .toNumber()
           };
         }
       );
@@ -352,7 +446,10 @@ export class PortfolioController {
         performanceInformation.performance,
         [
           'currentGrossPerformance',
+          'currentGrossPerformanceWithCurrencyEffect',
           'currentNetPerformance',
+          'currentNetPerformanceWithCurrencyEffect',
+          'currentNetWorth',
           'currentValue',
           'totalInvestment'
         ]
@@ -368,25 +465,31 @@ export class PortfolioController {
           return nullifyValuesInObject(item, ['totalInvestment', 'value']);
         }
       );
+      performanceInformation.performance = nullifyValuesInObject(
+        performanceInformation.performance,
+        ['currentNetPerformance', 'currentNetPerformancePercent']
+      );
     }
 
     return performanceInformation;
   }
 
   @Get('positions')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
   @UseInterceptors(RedactValuesInResponseInterceptor)
   @UseInterceptors(TransformDataSourceInResponseInterceptor)
   public async getPositions(
     @Headers(HEADER_KEY_IMPERSONATION.toLowerCase()) impersonationId: string,
     @Query('accounts') filterByAccounts?: string,
     @Query('assetClasses') filterByAssetClasses?: string,
+    @Query('query') filterBySearchQuery?: string,
     @Query('range') dateRange: DateRange = 'max',
     @Query('tags') filterByTags?: string
   ): Promise<PortfolioPositions> {
     const filters = this.apiService.buildFiltersFromQueryParams({
       filterByAccounts,
       filterByAssetClasses,
+      filterBySearchQuery,
       filterByTags
     });
 
@@ -420,7 +523,6 @@ export class PortfolioController {
     }
 
     const { holdings } = await this.portfolioService.getDetails({
-      dateRange: 'max',
       filters: [{ id: 'EQUITY', type: 'ASSET_CLASS' }],
       impersonationId: access.userId,
       userId: user.id
@@ -437,26 +539,27 @@ export class PortfolioController {
         return this.exchangeRateDataService.toCurrency(
           portfolioPosition.quantity * portfolioPosition.marketPrice,
           portfolioPosition.currency,
-          this.request.user?.Settings?.settings.baseCurrency ??
-            this.baseCurrency
+          this.request.user?.Settings?.settings.baseCurrency ?? DEFAULT_CURRENCY
         );
       })
       .reduce((a, b) => a + b, 0);
 
     for (const [symbol, portfolioPosition] of Object.entries(holdings)) {
       portfolioPublicDetails.holdings[symbol] = {
-        allocationInPercentage: portfolioPosition.value / totalValue,
+        allocationInPercentage:
+          portfolioPosition.valueInBaseCurrency / totalValue,
         countries: hasDetails ? portfolioPosition.countries : [],
         currency: hasDetails ? portfolioPosition.currency : undefined,
         dataSource: portfolioPosition.dataSource,
         dateOfFirstActivity: portfolioPosition.dateOfFirstActivity,
         markets: hasDetails ? portfolioPosition.markets : undefined,
         name: portfolioPosition.name,
-        netPerformancePercent: portfolioPosition.netPerformancePercent,
+        netPerformancePercentWithCurrencyEffect:
+          portfolioPosition.netPerformancePercentWithCurrencyEffect,
         sectors: hasDetails ? portfolioPosition.sectors : [],
         symbol: portfolioPosition.symbol,
         url: portfolioPosition.url,
-        valueInPercentage: portfolioPosition.value / totalValue
+        valueInPercentage: portfolioPosition.valueInBaseCurrency / totalValue
       };
     }
 
@@ -467,7 +570,7 @@ export class PortfolioController {
   @UseInterceptors(RedactValuesInResponseInterceptor)
   @UseInterceptors(TransformDataSourceInRequestInterceptor)
   @UseInterceptors(TransformDataSourceInResponseInterceptor)
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
   public async getPosition(
     @Headers(HEADER_KEY_IMPERSONATION.toLowerCase()) impersonationId: string,
     @Param('dataSource') dataSource,
@@ -490,7 +593,7 @@ export class PortfolioController {
   }
 
   @Get('report')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
   public async getReport(
     @Headers(HEADER_KEY_IMPERSONATION.toLowerCase()) impersonationId: string
   ): Promise<PortfolioReport> {

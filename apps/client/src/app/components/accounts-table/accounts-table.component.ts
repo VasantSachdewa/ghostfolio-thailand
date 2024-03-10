@@ -1,3 +1,5 @@
+import { getLocale } from '@ghostfolio/common/helper';
+
 import {
   ChangeDetectionStrategy,
   Component,
@@ -26,14 +28,21 @@ export class AccountsTableComponent implements OnChanges, OnDestroy, OnInit {
   @Input() accounts: AccountModel[];
   @Input() baseCurrency: string;
   @Input() deviceType: string;
-  @Input() locale: string;
+  @Input() hasPermissionToOpenDetails = true;
+  @Input() locale = getLocale();
   @Input() showActions: boolean;
+  @Input() showBalance = true;
+  @Input() showFooter = true;
+  @Input() showTransactions = true;
+  @Input() showValue = true;
+  @Input() showValueInBaseCurrency = true;
   @Input() totalBalanceInBaseCurrency: number;
   @Input() totalValueInBaseCurrency: number;
   @Input() transactionCount: number;
 
   @Output() accountDeleted = new EventEmitter<string>();
   @Output() accountToUpdate = new EventEmitter<AccountModel>();
+  @Output() transferBalance = new EventEmitter<void>();
 
   @ViewChild(MatSort) sort: MatSort;
 
@@ -50,17 +59,27 @@ export class AccountsTableComponent implements OnChanges, OnDestroy, OnInit {
   public ngOnInit() {}
 
   public ngOnChanges() {
-    this.displayedColumns = [
-      'status',
-      'account',
-      'platform',
-      'transactions',
-      'balance',
-      'value',
-      'currency',
-      'valueInBaseCurrency',
-      'comment'
-    ];
+    this.displayedColumns = ['status', 'account', 'platform'];
+
+    if (this.showTransactions) {
+      this.displayedColumns.push('transactions');
+    }
+
+    if (this.showBalance) {
+      this.displayedColumns.push('balance');
+    }
+
+    if (this.showValue) {
+      this.displayedColumns.push('value');
+    }
+
+    this.displayedColumns.push('currency');
+
+    if (this.showValueInBaseCurrency) {
+      this.displayedColumns.push('valueInBaseCurrency');
+    }
+
+    this.displayedColumns.push('comment');
 
     if (this.showActions) {
       this.displayedColumns.push('actions');
@@ -88,13 +107,19 @@ export class AccountsTableComponent implements OnChanges, OnDestroy, OnInit {
   }
 
   public onOpenAccountDetailDialog(accountId: string) {
-    this.router.navigate([], {
-      queryParams: { accountId, accountDetailDialog: true }
-    });
+    if (this.hasPermissionToOpenDetails) {
+      this.router.navigate([], {
+        queryParams: { accountId, accountDetailDialog: true }
+      });
+    }
   }
 
   public onOpenComment(aComment: string) {
     alert(aComment);
+  }
+
+  public onTransferBalance() {
+    this.transferBalance.emit();
   }
 
   public onUpdateAccount(aAccount: AccountModel) {

@@ -1,6 +1,6 @@
 <div class="container">
-  <h3 class="d-none d-sm-block mb-3 text-center" i18n>Markets</h3>
-  <div class="mb-5 row">
+  <h1 class="d-none d-sm-block h3 mb-4 text-center" i18n>Markets</h1>
+  <div *ngIf="hasPermissionToAccessFearAndGreedIndex" class="mb-5 row">
     <div class="col-xs-12 col-md-8 offset-md-2">
       <div class="mb-2 text-center text-muted">
         <small i18n>Last {{ numberOfDays }} Days</small>
@@ -8,21 +8,21 @@
       <gf-line-chart
         class="mb-3"
         symbol="Fear & Greed Index"
-        yMax="100"
-        yMin="0"
         [colorScheme]="user?.settings?.colorScheme"
         [historicalDataItems]="historicalDataItems"
         [isAnimated]="true"
         [locale]="user?.settings?.locale"
         [showXAxis]="true"
         [showYAxis]="true"
+        [yMax]="100"
         [yMaxLabel]="greedLabel"
+        [yMin]="0"
         [yMinLabel]="fearLabel"
-      ></gf-line-chart>
+      />
       <gf-fear-and-greed-index
         class="d-flex justify-content-center"
         [fearAndGreedIndex]="fearAndGreedIndex"
-      ></gf-fear-and-greed-index>
+      />
     </div>
   </div>
 
@@ -31,7 +31,8 @@
       <gf-benchmark
         [benchmarks]="benchmarks"
         [locale]="user?.settings?.locale"
-      ></gf-benchmark>
+        [user]="user"
+      />
       <ngx-skeleton-loader
         *ngIf="isLoading"
         animation="pulse"
@@ -40,7 +41,7 @@
           height: '1.5rem',
           width: '100%'
         }"
-      ></ngx-skeleton-loader>
+      />
     </div>
   </div>
 </div>

@@ -1,7 +1,5 @@
-import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
-import { MatDialog } from '@angular/material/dialog';
-import { ActivatedRoute, Router } from '@angular/router';
 import { CreateAccountDto } from '@ghostfolio/api/app/account/create-account.dto';
+import { TransferBalanceDto } from '@ghostfolio/api/app/account/transfer-balance.dto';
 import { UpdateAccountDto } from '@ghostfolio/api/app/account/update-account.dto';
 import { AccountDetailDialog } from '@ghostfolio/client/components/account-detail-dialog/account-detail-dialog.component';
 import { AccountDetailDialogParams } from '@ghostfolio/client/components/account-detail-dialog/interfaces/interfaces';
@@ -10,12 +8,17 @@ import { ImpersonationStorageService } from '@ghostfolio/client/services/imperso
 import { UserService } from '@ghostfolio/client/services/user/user.service';
 import { User } from '@ghostfolio/common/interfaces';
 import { hasPermission, permissions } from '@ghostfolio/common/permissions';
-import { Account as AccountModel, AccountType } from '@prisma/client';
+
+import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
+import { MatDialog } from '@angular/material/dialog';
+import { ActivatedRoute, Router } from '@angular/router';
+import { Account as AccountModel } from '@prisma/client';
 import { DeviceDetectorService } from 'ngx-device-detector';
-import { Subject, Subscription } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { EMPTY, Subject, Subscription } from 'rxjs';
+import { catchError, takeUntil } from 'rxjs/operators';
 
 import { CreateOrUpdateAccountDialog } from './create-or-update-account-dialog/create-or-update-account-dialog.component';
+import { TransferBalanceDialog } from './transfer-balance/transfer-balance-dialog.component';
 
 @Component({
   host: { class: 'page' },
@@ -28,7 +31,7 @@ export class AccountsPageComponent implements OnDestroy, OnInit {
   public deviceType: string;
   public hasImpersonationId: boolean;
   public hasPermissionToCreateAccount: boolean;
-  public hasPermissionToDeleteAccount: boolean;
+  public hasPermissionToUpdateAccount: boolean;
   public routeQueryParams: Subscription;
   public totalBalanceInBaseCurrency = 0;
   public totalValueInBaseCurrency = 0;
@@ -67,6 +70,8 @@ export class AccountsPageComponent implements OnDestroy, OnInit {
           } else {
             this.router.navigate(['.'], { relativeTo: this.route });
           }
+        } else if (params['transferBalanceDialog']) {
+          this.openTransferBalanceDialog();
         }
       });
   }
@@ -91,9 +96,9 @@ export class AccountsPageComponent implements OnDestroy, OnInit {
             this.user.permissions,
             permissions.createAccount
           );
-          this.hasPermissionToDeleteAccount = hasPermission(
+          this.hasPermissionToUpdateAccount = hasPermission(
             this.user.permissions,
-            permissions.deleteAccount
+            permissions.updateAccount
           );
 
           this.changeDetectorRef.markForCheck();
@@ -144,6 +149,12 @@ export class AccountsPageComponent implements OnDestroy, OnInit {
       });
   }
 
+  public onTransferBalance() {
+    this.router.navigate([], {
+      queryParams: { transferBalanceDialog: true }
+    });
+  }
+
   public onUpdateAccount(aAccount: AccountModel) {
     this.router.navigate([], {
       queryParams: { accountId: aAccount.id, editDialog: true }
@@ -151,7 +162,6 @@ export class AccountsPageComponent implements OnDestroy, OnInit {
   }
 
   public openUpdateAccountDialog({
-    accountType,
     balance,
     comment,
     currency,
@@ -159,11 +169,10 @@ export class AccountsPageComponent implements OnDestroy, OnInit {
     isExcluded,
     name,
     platformId
-  }: AccountModel): void {
+  }: AccountModel) {
     const dialogRef = this.dialog.open(CreateOrUpdateAccountDialog, {
       data: {
         account: {
-          accountType,
           balance,
           comment,
           currency,
@@ -228,11 +237,10 @@ export class AccountsPageComponent implements OnDestroy, OnInit {
       });
   }
 
-  private openCreateAccountDialog(): void {
+  private openCreateAccountDialog() {
     const dialogRef = this.dialog.open(CreateOrUpdateAccountDialog, {
       data: {
         account: {
-          accountType: AccountType.SECURITIES,
           balance: 0,
           comment: null,
           currency: this.user?.settings?.baseCurrency,
@@ -264,6 +272,45 @@ export class AccountsPageComponent implements OnDestroy, OnInit {
 
                 this.fetchAccounts();
               }
+            });
+        }
+
+        this.router.navigate(['.'], { relativeTo: this.route });
+      });
+  }
+
+  private openTransferBalanceDialog() {
+    const dialogRef = this.dialog.open(TransferBalanceDialog, {
+      data: {
+        accounts: this.accounts
+      },
+      width: this.deviceType === 'mobile' ? '100vw' : '50rem'
+    });
+
+    dialogRef
+      .afterClosed()
+      .pipe(takeUntil(this.unsubscribeSubject))
+      .subscribe((data: any) => {
+        if (data) {
+          const { accountIdFrom, accountIdTo, balance }: TransferBalanceDto =
+            data?.account;
+
+          this.dataService
+            .transferAccountBalance({
+              accountIdFrom,
+              accountIdTo,
+              balance
+            })
+            .pipe(
+              catchError(() => {
+                alert($localize`Oops, cash balance transfer has failed.`);
+
+                return EMPTY;
+              }),
+              takeUntil(this.unsubscribeSubject)
+            )
+            .subscribe(() => {
+              this.fetchAccounts();
             });
         }
 

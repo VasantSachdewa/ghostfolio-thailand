@@ -1,13 +1,14 @@
+import { InternetIdentityService } from '@ghostfolio/client/services/internet-identity.service';
+import {
+  KEY_STAY_SIGNED_IN,
+  SettingsStorageService
+} from '@ghostfolio/client/services/settings-storage.service';
+import { TokenStorageService } from '@ghostfolio/client/services/token-storage.service';
+
 import { ChangeDetectionStrategy, Component, Inject } from '@angular/core';
 import { MatCheckboxChange } from '@angular/material/checkbox';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { Router } from '@angular/router';
-import { InternetIdentityService } from '@ghostfolio/client/services/internet-identity.service';
-import {
-  STAY_SIGNED_IN,
-  SettingsStorageService
-} from '@ghostfolio/client/services/settings-storage.service';
-import { TokenStorageService } from '@ghostfolio/client/services/token-storage.service';
 
 @Component({
   selector: 'gf-login-with-access-token-dialog',
@@ -16,6 +17,8 @@ import { TokenStorageService } from '@ghostfolio/client/services/token-storage.s
   templateUrl: 'login-with-access-token-dialog.html'
 })
 export class LoginWithAccessTokenDialog {
+  public isAccessTokenHidden = true;
+
   public constructor(
     @Inject(MAT_DIALOG_DATA) public data: any,
     public dialogRef: MatDialogRef<LoginWithAccessTokenDialog>,
@@ -29,13 +32,19 @@ export class LoginWithAccessTokenDialog {
 
   public onChangeStaySignedIn(aValue: MatCheckboxChange) {
     this.settingsStorageService.setSetting(
-      STAY_SIGNED_IN,
+      KEY_STAY_SIGNED_IN,
       aValue.checked?.toString()
     );
   }
 
   public onClose() {
     this.dialogRef.close();
+  }
+
+  public onLoginWithAccessToken() {
+    if (this.data.accessToken) {
+      this.dialogRef.close(this.data);
+    }
   }
 
   public async onLoginWithInternetIdentity() {

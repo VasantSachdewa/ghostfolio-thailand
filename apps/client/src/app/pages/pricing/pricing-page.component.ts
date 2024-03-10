@@ -1,8 +1,10 @@
-import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { DataService } from '@ghostfolio/client/services/data.service';
 import { UserService } from '@ghostfolio/client/services/user/user.service';
 import { User } from '@ghostfolio/common/interfaces';
+import { hasPermission, permissions } from '@ghostfolio/common/permissions';
 import { translate } from '@ghostfolio/ui/i18n';
+
+import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { StripeService } from 'ngx-stripe';
 import { Subject } from 'rxjs';
 import { catchError, switchMap, takeUntil } from 'rxjs/operators';
@@ -17,6 +19,7 @@ export class PricingPageComponent implements OnDestroy, OnInit {
   public baseCurrency: string;
   public coupon: number;
   public couponId: string;
+  public hasPermissionToUpdateUserSettings: boolean;
   public importAndExportTooltipBasic = translate(
     'DATA_IMPORT_AND_EXPORT_TOOLTIP_BASIC'
   );
@@ -29,6 +32,8 @@ export class PricingPageComponent implements OnDestroy, OnInit {
   public isLoggedIn: boolean;
   public price: number;
   public priceId: string;
+  public routerLinkFeatures = ['/' + $localize`features`];
+  public routerLinkRegister = ['/' + $localize`register`];
   public user: User;
 
   private unsubscribeSubject = new Subject<void>();
@@ -52,6 +57,11 @@ export class PricingPageComponent implements OnDestroy, OnInit {
       .subscribe((state) => {
         if (state?.user) {
           this.user = state.user;
+
+          this.hasPermissionToUpdateUserSettings = hasPermission(
+            this.user.permissions,
+            permissions.updateUserSettings
+          );
 
           this.coupon = subscriptions?.[this.user?.subscription?.offer]?.coupon;
           this.couponId =

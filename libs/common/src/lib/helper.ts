@@ -1,14 +1,78 @@
 import * as currencies from '@dinero.js/currencies';
-import { DataSource } from '@prisma/client';
+import { NumberParser } from '@internationalized/number';
+import { DataSource, MarketData, Type as ActivityType } from '@prisma/client';
 import Big from 'big.js';
-import { getDate, getMonth, getYear, parse, subDays } from 'date-fns';
-import { de, es, fr, it, nl, pt } from 'date-fns/locale';
+import {
+  getDate,
+  getMonth,
+  getYear,
+  isMatch,
+  parse,
+  parseISO,
+  subDays
+} from 'date-fns';
+import { de, es, fr, it, nl, pl, pt, tr } from 'date-fns/locale';
 
 import { ghostfolioScraperApiSymbolPrefix, locale } from './config';
-import { Benchmark } from './interfaces';
-import { ColorScheme } from './types';
+import { Benchmark, UniqueAsset } from './interfaces';
+import { BenchmarkTrend, ColorScheme } from './types';
 
-const NUMERIC_REGEXP = /[-]{0,1}[\d]*[.,]{0,1}[\d]+/g;
+export const DATE_FORMAT = 'yyyy-MM-dd';
+export const DATE_FORMAT_MONTHLY = 'MMMM yyyy';
+export const DATE_FORMAT_YEARLY = 'yyyy';
+
+export function calculateBenchmarkTrend({
+  days,
+  historicalData
+}: {
+  days: number;
+  historicalData: MarketData[];
+}): BenchmarkTrend {
+  const hasEnoughData = historicalData.length >= 2 * days;
+
+  if (!hasEnoughData) {
+    return 'UNKNOWN';
+  }
+
+  const recentPeriodAverage = calculateMovingAverage({
+    days,
+    prices: historicalData.slice(0, days).map(({ marketPrice }) => {
+      return new Big(marketPrice);
+    })
+  });
+
+  const pastPeriodAverage = calculateMovingAverage({
+    days,
+    prices: historicalData.slice(days, 2 * days).map(({ marketPrice }) => {
+      return new Big(marketPrice);
+    })
+  });
+
+  if (recentPeriodAverage > pastPeriodAverage) {
+    return 'UP';
+  }
+
+  if (recentPeriodAverage < pastPeriodAverage) {
+    return 'DOWN';
+  }
+
+  return 'NEUTRAL';
+}
+
+export function calculateMovingAverage({
+  days,
+  prices
+}: {
+  days: number;
+  prices: Big[];
+}) {
+  return prices
+    .reduce((previous, current) => {
+      return previous.add(current);
+    }, new Big(0))
+    .div(days)
+    .toNumber();
+}
 
 export function capitalize(aString: string) {
   return aString.charAt(0).toUpperCase() + aString.slice(1).toLowerCase();
@@ -55,13 +119,31 @@ export function encodeDataSource(aDataSource: DataSource) {
   return undefined;
 }
 
-export function extractNumberFromString(aString: string): number {
+export function extractNumberFromString({
+  locale = 'en-US',
+  value
+}: {
+  locale?: string;
+  value: string;
+}): number {
   try {
-    const [numberString] = aString.match(NUMERIC_REGEXP);
-    return parseFloat(numberString.trim());
+    // Remove non-numeric characters (excluding international formatting characters)
+    const numericValue = value.replace(/[^\d.,'’\s]/g, '');
+
+    let parser = new NumberParser(locale);
+
+    return parser.parse(numericValue);
   } catch {
     return undefined;
   }
+}
+
+export function getAllActivityTypes(): ActivityType[] {
+  return ['BUY', 'DIVIDEND', 'FEE', 'ITEM', 'LIABILITY', 'SELL'];
+}
+
+export function getAssetProfileIdentifier({ dataSource, symbol }: UniqueAsset) {
+  return `${dataSource}-${symbol}`;
 }
 
 export function getBackgroundColor(aColorScheme: ColorScheme) {
@@ -90,8 +172,12 @@ export function getDateFnsLocale(aLanguageCode: string) {
     return it;
   } else if (aLanguageCode === 'nl') {
     return nl;
+  } else if (aLanguageCode === 'pl') {
+    return pl;
   } else if (aLanguageCode === 'pt') {
     return pt;
+  } else if (aLanguageCode === 'tr') {
+    return tr;
   }
 
   return undefined;
@@ -135,9 +221,7 @@ export function getEmojiFlag(aCountryCode: string) {
 }
 
 export function getLocale() {
-  return navigator.languages?.length
-    ? navigator.languages[0]
-    : navigator.language ?? locale;
+  return navigator.language ?? locale;
 }
 
 export function getNumberFormatDecimal(aLocale?: string) {
@@ -148,7 +232,7 @@ export function getNumberFormatDecimal(aLocale?: string) {
   }).value;
 }
 
-export function getNumberFormatGroup(aLocale?: string) {
+export function getNumberFormatGroup(aLocale = getLocale()) {
   const formatObject = new Intl.NumberFormat(aLocale).formatToParts(9999.99);
 
   return formatObject.find((object) => {
@@ -226,8 +310,61 @@ export function groupBy<T, K extends keyof T>(
   return map;
 }
 
+export function interpolate(template: string, context: any) {
+  return template?.replace(/[$]{([^}]+)}/g, (_, objectPath) => {
+    const properties = objectPath.split('.');
+    return properties.reduce(
+      (previous, current) => previous?.[current],
+      context
+    );
+  });
+}
+
 export function isCurrency(aSymbol = '') {
   return currencies[aSymbol];
+}
+
+export function parseDate(date: string): Date | null {
+  // Transform 'yyyyMMdd' format to supported format by parse function
+  if (date?.length === 8) {
+    const match = date.match(/^(\d{4})(\d{2})(\d{2})$/);
+
+    if (match) {
+      const [, year, month, day] = match;
+      date = `${year}-${month}-${day}`;
+    }
+  }
+
+  const dateFormat = [
+    'dd-MM-yyyy',
+    'dd/MM/yyyy',
+    'dd.MM.yyyy',
+    'yyyy-MM-dd',
+    'yyyy/MM/dd',
+    'yyyy.MM.dd',
+    'yyyyMMdd'
+  ].find((format) => {
+    return isMatch(date, format) && format.length === date.length;
+  });
+
+  if (dateFormat) {
+    return parse(date, dateFormat, new Date());
+  }
+
+  return parseISO(date);
+}
+
+export function parseSymbol({ dataSource, symbol }: UniqueAsset) {
+  const [ticker, exchange] = symbol.split('.');
+
+  return {
+    ticker,
+    exchange: exchange ?? (dataSource === 'YAHOO' ? 'US' : undefined)
+  };
+}
+
+export function prettifySymbol(aSymbol: string): string {
+  return aSymbol?.replace(ghostfolioScraperApiSymbolPrefix, '');
 }
 
 export function resetHours(aDate: Date) {
@@ -240,38 +377,26 @@ export function resetHours(aDate: Date) {
 
 export function resolveFearAndGreedIndex(aValue: number) {
   if (aValue <= 25) {
-    return { emoji: '🥵', text: 'Extreme Fear' };
+    return { emoji: '🥵', key: 'EXTREME_FEAR', text: 'Extreme Fear' };
   } else if (aValue <= 45) {
-    return { emoji: '😨', text: 'Fear' };
+    return { emoji: '😨', key: 'FEAR', text: 'Fear' };
   } else if (aValue <= 55) {
-    return { emoji: '😐', text: 'Neutral' };
+    return { emoji: '😐', key: 'NEUTRAL', text: 'Neutral' };
   } else if (aValue < 75) {
-    return { emoji: '😜', text: 'Greed' };
+    return { emoji: '😜', key: 'GREED', text: 'Greed' };
   } else {
-    return { emoji: '🤪', text: 'Extreme Greed' };
+    return { emoji: '🤪', key: 'EXTREME_GREED', text: 'Extreme Greed' };
   }
 }
 
 export function resolveMarketCondition(
   aMarketCondition: Benchmark['marketCondition']
 ) {
-  if (aMarketCondition === 'BEAR_MARKET') {
+  if (aMarketCondition === 'ALL_TIME_HIGH') {
+    return { emoji: '🎉' };
+  } else if (aMarketCondition === 'BEAR_MARKET') {
     return { emoji: '🐻' };
-  } else if (aMarketCondition === 'BULL_MARKET') {
-    return { emoji: '🐮' };
   } else {
-    return { emoji: '⚪' };
+    return { emoji: undefined };
   }
-}
-
-export const DATE_FORMAT = 'yyyy-MM-dd';
-export const DATE_FORMAT_MONTHLY = 'MMMM yyyy';
-export const DATE_FORMAT_YEARLY = 'yyyy';
-
-export function parseDate(date: string) {
-  return parse(date, DATE_FORMAT, new Date());
-}
-
-export function prettifySymbol(aSymbol: string): string {
-  return aSymbol?.replace(ghostfolioScraperApiSymbolPrefix, '');
 }

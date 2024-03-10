@@ -1,5 +1,5 @@
 <div *ngIf="icon" class="align-self-center mr-3">
-  <ion-icon class="h3 m-0" [name]="icon"></ion-icon>
+  <ion-icon class="h3 m-0" [name]="icon" />
 </div>
 <div class="w-100">
   <ng-template #label><ng-content></ng-content></ng-template>
@@ -16,21 +16,30 @@
         <div
           *ngIf="isPercent"
           class="mb-0 value"
-          [ngClass]="{ h2: size === 'large', h4: size === 'medium' }"
+          [ngClass]="{
+            'font-weight-bold h2': size === 'large',
+            h4: size === 'medium'
+          }"
         >
-          {{ formattedValue }}%
+          @if (value === null) {
+            <span class="text-monospace text-muted">*****</span>%
+          } @else {
+            {{ formattedValue }}%
+          }
         </div>
         <div
           *ngIf="!isPercent"
           class="mb-0 value"
-          [ngClass]="{ h2: size === 'large', h4: size === 'medium' }"
+          [ngClass]="{
+            'font-weight-bold h2': size === 'large',
+            h4: size === 'medium'
+          }"
         >
-          <ng-container *ngIf="value === null">
-            <span class="text-monospace text-muted">***</span>
-          </ng-container>
-          <ng-container *ngIf="value !== null">
+          @if (value === null) {
+            <span class="text-monospace text-muted">*****</span>
+          } @else {
             {{ formattedValue }}
-          </ng-container>
+          }
         </div>
         <small *ngIf="unit && size === 'medium'" class="ml-1">
           {{ unit }}
@@ -42,7 +51,10 @@
       <ng-container *ngIf="isString">
         <div
           class="mb-0 text-truncate value"
-          [ngClass]="{ h2: size === 'large', h4: size === 'medium' }"
+          [ngClass]="{
+            'font-weight-bold h2': size === 'large',
+            h4: size === 'medium'
+          }"
         >
           {{ formattedValue }}
         </div>
@@ -58,7 +70,7 @@
         size === 'large' ? '2rem' : size === 'medium' ? '1.8rem' : '1.5rem',
       width: '5rem'
     }"
-  ></ngx-skeleton-loader>
+  />
 
   <ng-container>
     <div *ngIf="size === 'large'">

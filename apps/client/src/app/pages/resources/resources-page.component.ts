@@ -1,3 +1,7 @@
+import { DataService } from '@ghostfolio/client/services/data.service';
+import { InfoItem } from '@ghostfolio/common/interfaces';
+import { hasPermission, permissions } from '@ghostfolio/common/permissions';
+
 import { Component, OnInit } from '@angular/core';
 import { Subject } from 'rxjs';
 
@@ -8,11 +12,25 @@ import { Subject } from 'rxjs';
   templateUrl: './resources-page.html'
 })
 export class ResourcesPageComponent implements OnInit {
+  public hasPermissionForSubscription: boolean;
+  public info: InfoItem;
+  public routerLinkResourcesPersonalFinanceTools = [
+    '/' + $localize`resources`,
+    'personal-finance-tools'
+  ];
+
   private unsubscribeSubject = new Subject<void>();
 
-  public constructor() {}
+  public constructor(private dataService: DataService) {
+    this.info = this.dataService.fetchInfo();
+  }
 
-  public ngOnInit() {}
+  public ngOnInit() {
+    this.hasPermissionForSubscription = hasPermission(
+      this.info?.globalPermissions,
+      permissions.enableSubscription
+    );
+  }
 
   public ngOnDestroy() {
     this.unsubscribeSubject.next();

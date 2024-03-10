@@ -13,11 +13,12 @@
       <div class="d-flex mr-2">
         <gf-trend-indicator
           class="d-flex"
+          size="large"
           [isLoading]="isLoading"
           [marketState]="position?.marketState"
           [range]="range"
-          [value]="position?.netPerformancePercentage"
-        ></gf-trend-indicator>
+          [value]="position?.netPerformancePercentageWithCurrencyEffect"
+        />
       </div>
       <div *ngIf="isLoading" class="flex-grow-1">
         <ngx-skeleton-loader
@@ -27,14 +28,14 @@
             height: '1.2rem',
             width: '12rem'
           }"
-        ></ngx-skeleton-loader>
+        />
         <ngx-skeleton-loader
           animation="pulse"
           [theme]="{
             height: '1rem',
             width: '8rem'
           }"
-        ></ngx-skeleton-loader>
+        />
       </div>
       <div *ngIf="!isLoading" class="flex-grow-1 text-truncate">
         <div class="h6 m-0 text-truncate">{{ position?.name }}</div>
@@ -48,14 +49,14 @@
             [isCurrency]="true"
             [locale]="locale"
             [unit]="baseCurrency"
-            [value]="position?.netPerformance"
-          ></gf-value>
+            [value]="position?.netPerformanceWithCurrencyEffect"
+          />
           <gf-value
             [colorizeSign]="true"
             [isPercent]="true"
             [locale]="locale"
-            [value]="position?.netPerformancePercentage"
-          ></gf-value>
+            [value]="position?.netPerformancePercentageWithCurrencyEffect"
+          />
         </div>
       </div>
       <div class="align-items-center d-flex">
@@ -64,7 +65,7 @@
           class="chevron text-muted"
           name="chevron-forward-outline"
           size="small"
-        ></ion-icon>
+        />
       </div>
     </a>
   </div>

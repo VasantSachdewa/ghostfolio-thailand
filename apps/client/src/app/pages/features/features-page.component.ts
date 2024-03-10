@@ -1,8 +1,9 @@
-import { ChangeDetectorRef, Component, OnDestroy } from '@angular/core';
 import { DataService } from '@ghostfolio/client/services/data.service';
 import { UserService } from '@ghostfolio/client/services/user/user.service';
 import { InfoItem, User } from '@ghostfolio/common/interfaces';
 import { hasPermission, permissions } from '@ghostfolio/common/permissions';
+
+import { ChangeDetectorRef, Component, OnDestroy } from '@angular/core';
 import { Subject, takeUntil } from 'rxjs';
 
 @Component({
@@ -14,6 +15,8 @@ import { Subject, takeUntil } from 'rxjs';
 export class FeaturesPageComponent implements OnDestroy {
   public hasPermissionForSubscription: boolean;
   public info: InfoItem;
+  public routerLinkRegister = ['/' + $localize`register`];
+  public routerLinkResources = ['/' + $localize`resources`];
   public user: User;
 
   private unsubscribeSubject = new Subject<void>();

@@ -7,6 +7,7 @@ import { MarketDataService } from '@ghostfolio/api/services/market-data/market-d
 import { DATE_FORMAT } from '@ghostfolio/common/helper';
 import { HistoricalDataItem } from '@ghostfolio/common/interfaces';
 import { UserWithSettings } from '@ghostfolio/common/types';
+
 import { Injectable, Logger } from '@nestjs/common';
 import { format, subDays } from 'date-fns';
 
@@ -27,9 +28,9 @@ export class SymbolService {
     dataGatheringItem: IDataGatheringItem;
     includeHistoricalData?: number;
   }): Promise<SymbolItem> {
-    const quotes = await this.dataProviderService.getQuotes([
-      dataGatheringItem
-    ]);
+    const quotes = await this.dataProviderService.getQuotes({
+      items: [dataGatheringItem]
+    });
     const { currency, marketPrice } = quotes[dataGatheringItem.symbol] ?? {};
 
     if (dataGatheringItem.dataSource && marketPrice >= 0) {
@@ -40,7 +41,12 @@ export class SymbolService {
 
         const marketData = await this.marketDataService.getRange({
           dateQuery: { gte: subDays(new Date(), days) },
-          symbols: [dataGatheringItem.symbol]
+          uniqueAssets: [
+            {
+              dataSource: dataGatheringItem.dataSource,
+              symbol: dataGatheringItem.symbol
+            }
+          ]
         });
 
         historicalData = marketData.map(({ date, marketPrice: value }) => {

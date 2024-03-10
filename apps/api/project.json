@@ -7,14 +7,16 @@
   "generators": {},
   "targets": {
     "build": {
-      "executor": "@nrwl/webpack:webpack",
+      "executor": "@nx/webpack:webpack",
       "options": {
-        "outputPath": "dist/apps/api",
+        "compiler": "tsc",
+        "deleteOutputPath": false,
         "main": "apps/api/src/main.ts",
-        "tsConfig": "apps/api/tsconfig.app.json",
-        "assets": ["apps/api/src/assets"],
+        "outputPath": "dist/apps/api",
+        "sourceMap": true,
         "target": "node",
-        "compiler": "tsc"
+        "tsConfig": "apps/api/tsconfig.app.json",
+        "webpackConfig": "apps/api/webpack.config.js"
       },
       "configurations": {
         "production": {
@@ -32,14 +34,34 @@
       },
       "outputs": ["{options.outputPath}"]
     },
+    "copy-assets": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          {
+            "command": "shx rm -rf dist/apps/api"
+          },
+          {
+            "command": "shx mkdir -p dist/apps/api/assets/locales"
+          },
+          {
+            "command": "shx cp -r apps/api/src/assets/* dist/apps/api/assets"
+          },
+          {
+            "command": "shx cp -r apps/client/src/locales/* dist/apps/api/assets/locales"
+          }
+        ],
+        "parallel": false
+      }
+    },
     "serve": {
-      "executor": "@nx/node:node",
+      "executor": "@nx/js:node",
       "options": {
         "buildTarget": "api:build"
       }
     },
     "lint": {
-      "executor": "@nrwl/linter:eslint",
+      "executor": "@nx/eslint:lint",
       "options": {
         "lintFilePatterns": ["apps/api/**/*.ts"]
       }
@@ -47,8 +69,7 @@
     "test": {
       "executor": "@nx/jest:jest",
       "options": {
-        "jestConfig": "apps/api/jest.config.ts",
-        "passWithNoTests": true
+        "jestConfig": "apps/api/jest.config.ts"
       },
       "outputs": ["{workspaceRoot}/coverage/apps/api"]
     }

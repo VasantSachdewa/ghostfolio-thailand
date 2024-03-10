@@ -1,22 +1,23 @@
+import { InfoItem, User } from '@ghostfolio/common/interfaces';
+import { hasPermission, permissions } from '@ghostfolio/common/permissions';
+import { ColorScheme } from '@ghostfolio/common/types';
+
 import { DOCUMENT } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  HostBinding,
   Inject,
   OnDestroy,
   OnInit
 } from '@angular/core';
 import { Title } from '@angular/platform-browser';
 import { NavigationEnd, PRIMARY_OUTLET, Router } from '@angular/router';
-import { InfoItem, User } from '@ghostfolio/common/interfaces';
-import { hasPermission, permissions } from '@ghostfolio/common/permissions';
-import { ColorScheme } from '@ghostfolio/common/types';
 import { DeviceDetectorService } from 'ngx-device-detector';
 import { Subject } from 'rxjs';
 import { filter, takeUntil } from 'rxjs/operators';
 
-import { environment } from '../environments/environment';
 import { DataService } from './services/data.service';
 import { TokenStorageService } from './services/token-storage.service';
 import { UserService } from './services/user/user.service';
@@ -28,18 +29,36 @@ import { UserService } from './services/user/user.service';
   styleUrls: ['./app.component.scss']
 })
 export class AppComponent implements OnDestroy, OnInit {
+  @HostBinding('class.has-info-message') get getHasMessage() {
+    return this.hasInfoMessage;
+  }
+
   public canCreateAccount: boolean;
   public currentRoute: string;
   public currentYear = new Date().getFullYear();
   public deviceType: string;
-  public hasPermissionForBlog: boolean;
+  public hasInfoMessage: boolean;
   public hasPermissionForStatistics: boolean;
   public hasPermissionForSubscription: boolean;
   public hasPermissionToAccessFearAndGreedIndex: boolean;
+  public hasTabs = false;
   public info: InfoItem;
   public pageTitle: string;
+  public routerLinkAbout = ['/' + $localize`about`];
+  public routerLinkAboutChangelog = ['/' + $localize`about`, 'changelog'];
+  public routerLinkAboutLicense = ['/' + $localize`about`, $localize`license`];
+  public routerLinkAboutPrivacyPolicy = [
+    '/' + $localize`about`,
+    $localize`privacy-policy`
+  ];
+  public routerLinkFaq = ['/' + $localize`faq`];
+  public routerLinkFeatures = ['/' + $localize`features`];
+  public routerLinkMarkets = ['/' + $localize`markets`];
+  public routerLinkPricing = ['/' + $localize`pricing`];
+  public routerLinkRegister = ['/' + $localize`register`];
+  public routerLinkResources = ['/' + $localize`resources`];
+  public showFooter = false;
   public user: User;
-  public version = environment.version;
 
   private unsubscribeSubject = new Subject<void>();
 
@@ -60,11 +79,6 @@ export class AppComponent implements OnDestroy, OnInit {
   public ngOnInit() {
     this.deviceType = this.deviceService.getDeviceInfo().deviceType;
     this.info = this.dataService.fetchInfo();
-
-    this.hasPermissionForBlog = hasPermission(
-      this.info?.globalPermissions,
-      permissions.enableBlog
-    );
 
     this.hasPermissionForSubscription = hasPermission(
       this.info?.globalPermissions,
@@ -88,6 +102,28 @@ export class AppComponent implements OnDestroy, OnInit {
         const urlSegmentGroup = urlTree.root.children[PRIMARY_OUTLET];
         const urlSegments = urlSegmentGroup.segments;
         this.currentRoute = urlSegments[0].path;
+
+        this.hasTabs =
+          (this.currentRoute === this.routerLinkAbout[0].slice(1) ||
+            this.currentRoute === this.routerLinkFaq[0].slice(1) ||
+            this.currentRoute === 'account' ||
+            this.currentRoute === 'admin' ||
+            this.currentRoute === 'home' ||
+            this.currentRoute === 'portfolio' ||
+            this.currentRoute === 'zen') &&
+          this.deviceType !== 'mobile';
+
+        this.showFooter =
+          (this.currentRoute === 'blog' ||
+            this.currentRoute === this.routerLinkFeatures[0].slice(1) ||
+            this.currentRoute === this.routerLinkMarkets[0].slice(1) ||
+            this.currentRoute === 'open' ||
+            this.currentRoute === 'p' ||
+            this.currentRoute === this.routerLinkPricing[0].slice(1) ||
+            this.currentRoute === this.routerLinkRegister[0].slice(1) ||
+            this.currentRoute === this.routerLinkResources[0].slice(1) ||
+            this.currentRoute === 'start') &&
+          this.deviceType !== 'mobile';
 
         if (this.deviceType === 'mobile') {
           setTimeout(() => {
@@ -113,18 +149,25 @@ export class AppComponent implements OnDestroy, OnInit {
           permissions.createUserAccount
         );
 
+        this.hasInfoMessage =
+          this.canCreateAccount || !!this.user?.systemMessage;
+
         this.initializeTheme(this.user?.settings.colorScheme);
 
         this.changeDetectorRef.markForCheck();
       });
   }
 
-  public onCreateAccount() {
-    this.tokenStorageService.signOut();
+  public onClickSystemMessage() {
+    if (this.user.systemMessage.routerLink) {
+      this.router.navigate(this.user.systemMessage.routerLink);
+    } else {
+      alert(this.user.systemMessage.message);
+    }
   }
 
-  public onShowSystemMessage() {
-    alert(this.info.systemMessage);
+  public onCreateAccount() {
+    this.tokenStorageService.signOut();
   }
 
   public onSignOut() {

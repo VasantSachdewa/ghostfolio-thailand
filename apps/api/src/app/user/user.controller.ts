@@ -1,7 +1,14 @@
+import { HasPermission } from '@ghostfolio/api/decorators/has-permission.decorator';
+import { HasPermissionGuard } from '@ghostfolio/api/guards/has-permission.guard';
 import { PropertyService } from '@ghostfolio/api/services/property/property.service';
 import { User, UserSettings } from '@ghostfolio/common/interfaces';
-import { hasPermission, permissions } from '@ghostfolio/common/permissions';
+import {
+  hasPermission,
+  hasRole,
+  permissions
+} from '@ghostfolio/common/permissions';
 import type { RequestWithUser } from '@ghostfolio/common/types';
+
 import {
   Body,
   Controller,
@@ -36,12 +43,10 @@ export class UserController {
   ) {}
 
   @Delete(':id')
-  @UseGuards(AuthGuard('jwt'))
+  @HasPermission(permissions.deleteUser)
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
   public async deleteUser(@Param('id') id: string): Promise<UserModel> {
-    if (
-      !hasPermission(this.request.user.permissions, permissions.deleteUser) ||
-      id === this.request.user.id
-    ) {
+    if (id === this.request.user.id) {
       throw new HttpException(
         getReasonPhrase(StatusCodes.FORBIDDEN),
         StatusCodes.FORBIDDEN
@@ -54,10 +59,17 @@ export class UserController {
   }
 
   @Get()
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
   public async getUser(
     @Headers('accept-language') acceptLanguage: string
   ): Promise<User> {
+    if (hasRole(this.request.user, 'INACTIVE')) {
+      throw new HttpException(
+        getReasonPhrase(StatusCodes.TOO_MANY_REQUESTS),
+        StatusCodes.TOO_MANY_REQUESTS
+      );
+    }
+
     return this.userService.getUser(
       this.request.user,
       acceptLanguage?.split(',')?.[0]
@@ -92,7 +104,7 @@ export class UserController {
   }
 
   @Put('setting')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
   public async updateUserSetting(@Body() data: UpdateUserSettingDto) {
     if (
       size(data) === 1 &&

@@ -1,12 +1,15 @@
+import { CacheService } from '@ghostfolio/client/services/cache.service';
+import { GfValueModule } from '@ghostfolio/ui/value';
+
 import { CommonModule } from '@angular/common';
 import { CUSTOM_ELEMENTS_SCHEMA, NgModule } from '@angular/core';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
-import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatMenuModule } from '@angular/material/menu';
 import { MatSelectModule } from '@angular/material/select';
-import { CacheService } from '@ghostfolio/client/services/cache.service';
-import { GfValueModule } from '@ghostfolio/ui/value';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { RouterModule } from '@angular/router';
 
 import { AdminOverviewComponent } from './admin-overview.component';
 
@@ -18,10 +21,12 @@ import { AdminOverviewComponent } from './admin-overview.component';
     FormsModule,
     GfValueModule,
     MatButtonModule,
-    MatCheckboxModule,
     MatCardModule,
+    MatMenuModule,
     MatSelectModule,
-    ReactiveFormsModule
+    MatSlideToggleModule,
+    ReactiveFormsModule,
+    RouterModule
   ],
   providers: [CacheService],
   schemas: [CUSTOM_ELEMENTS_SCHEMA]

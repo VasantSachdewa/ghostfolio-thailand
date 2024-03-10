@@ -1,13 +1,20 @@
+import { AccountBalanceService } from '@ghostfolio/api/app/account-balance/account-balance.service';
 import { PortfolioService } from '@ghostfolio/api/app/portfolio/portfolio.service';
+import { HasPermission } from '@ghostfolio/api/decorators/has-permission.decorator';
+import { HasPermissionGuard } from '@ghostfolio/api/guards/has-permission.guard';
 import { RedactValuesInResponseInterceptor } from '@ghostfolio/api/interceptors/redact-values-in-response.interceptor';
 import { ImpersonationService } from '@ghostfolio/api/services/impersonation/impersonation.service';
 import { HEADER_KEY_IMPERSONATION } from '@ghostfolio/common/config';
-import { Accounts } from '@ghostfolio/common/interfaces';
-import { hasPermission, permissions } from '@ghostfolio/common/permissions';
+import {
+  AccountBalancesResponse,
+  Accounts
+} from '@ghostfolio/common/interfaces';
+import { permissions } from '@ghostfolio/common/permissions';
 import type {
   AccountWithValue,
   RequestWithUser
 } from '@ghostfolio/common/types';
+
 import {
   Body,
   Controller,
@@ -29,11 +36,13 @@ import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 
 import { AccountService } from './account.service';
 import { CreateAccountDto } from './create-account.dto';
+import { TransferBalanceDto } from './transfer-balance.dto';
 import { UpdateAccountDto } from './update-account.dto';
 
 @Controller('account')
 export class AccountController {
   public constructor(
+    private readonly accountBalanceService: AccountBalanceService,
     private readonly accountService: AccountService,
     private readonly impersonationService: ImpersonationService,
     private readonly portfolioService: PortfolioService,
@@ -41,17 +50,9 @@ export class AccountController {
   ) {}
 
   @Delete(':id')
-  @UseGuards(AuthGuard('jwt'))
+  @HasPermission(permissions.deleteAccount)
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
   public async deleteAccount(@Param('id') id: string): Promise<AccountModel> {
-    if (
-      !hasPermission(this.request.user.permissions, permissions.deleteAccount)
-    ) {
-      throw new HttpException(
-        getReasonPhrase(StatusCodes.FORBIDDEN),
-        StatusCodes.FORBIDDEN
-      );
-    }
-
     const account = await this.accountService.accountWithOrders(
       {
         id_userId: {
@@ -62,7 +63,7 @@ export class AccountController {
       { Order: true }
     );
 
-    if (account?.isDefault || account?.Order.length > 0) {
+    if (!account || account?.Order.length > 0) {
       throw new HttpException(
         getReasonPhrase(StatusCodes.FORBIDDEN),
         StatusCodes.FORBIDDEN
@@ -81,7 +82,7 @@ export class AccountController {
   }
 
   @Get()
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
   @UseInterceptors(RedactValuesInResponseInterceptor)
   public async getAllAccounts(
     @Headers(HEADER_KEY_IMPERSONATION.toLowerCase()) impersonationId
@@ -96,7 +97,7 @@ export class AccountController {
   }
 
   @Get(':id')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
   @UseInterceptors(RedactValuesInResponseInterceptor)
   public async getAccountById(
     @Headers(HEADER_KEY_IMPERSONATION.toLowerCase()) impersonationId,
@@ -115,20 +116,24 @@ export class AccountController {
     return accountsWithAggregations.accounts[0];
   }
 
+  @Get(':id/balances')
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
+  @UseInterceptors(RedactValuesInResponseInterceptor)
+  public async getAccountBalancesById(
+    @Param('id') id: string
+  ): Promise<AccountBalancesResponse> {
+    return this.accountBalanceService.getAccountBalances({
+      filters: [{ id, type: 'ACCOUNT' }],
+      user: this.request.user
+    });
+  }
+
+  @HasPermission(permissions.createAccount)
   @Post()
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
   public async createAccount(
     @Body() data: CreateAccountDto
   ): Promise<AccountModel> {
-    if (
-      !hasPermission(this.request.user.permissions, permissions.createAccount)
-    ) {
-      throw new HttpException(
-        getReasonPhrase(StatusCodes.FORBIDDEN),
-        StatusCodes.FORBIDDEN
-      );
-    }
-
     if (data.platformId) {
       const platformId = data.platformId;
       delete data.platformId;
@@ -154,18 +159,64 @@ export class AccountController {
     }
   }
 
-  @Put(':id')
-  @UseGuards(AuthGuard('jwt'))
-  public async update(@Param('id') id: string, @Body() data: UpdateAccountDto) {
-    if (
-      !hasPermission(this.request.user.permissions, permissions.updateAccount)
-    ) {
+  @HasPermission(permissions.updateAccount)
+  @Post('transfer-balance')
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
+  public async transferAccountBalance(
+    @Body() { accountIdFrom, accountIdTo, balance }: TransferBalanceDto
+  ) {
+    const accountsOfUser = await this.accountService.getAccounts(
+      this.request.user.id
+    );
+
+    const accountFrom = accountsOfUser.find(({ id }) => {
+      return id === accountIdFrom;
+    });
+
+    const accountTo = accountsOfUser.find(({ id }) => {
+      return id === accountIdTo;
+    });
+
+    if (!accountFrom || !accountTo) {
       throw new HttpException(
-        getReasonPhrase(StatusCodes.FORBIDDEN),
-        StatusCodes.FORBIDDEN
+        getReasonPhrase(StatusCodes.NOT_FOUND),
+        StatusCodes.NOT_FOUND
       );
     }
 
+    if (accountFrom.id === accountTo.id) {
+      throw new HttpException(
+        getReasonPhrase(StatusCodes.BAD_REQUEST),
+        StatusCodes.BAD_REQUEST
+      );
+    }
+
+    if (accountFrom.balance < balance) {
+      throw new HttpException(
+        getReasonPhrase(StatusCodes.BAD_REQUEST),
+        StatusCodes.BAD_REQUEST
+      );
+    }
+
+    await this.accountService.updateAccountBalance({
+      accountId: accountFrom.id,
+      amount: -balance,
+      currency: accountFrom.currency,
+      userId: this.request.user.id
+    });
+
+    await this.accountService.updateAccountBalance({
+      accountId: accountTo.id,
+      amount: balance,
+      currency: accountFrom.currency,
+      userId: this.request.user.id
+    });
+  }
+
+  @HasPermission(permissions.updateAccount)
+  @Put(':id')
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
+  public async update(@Param('id') id: string, @Body() data: UpdateAccountDto) {
     const originalAccount = await this.accountService.account({
       id_userId: {
         id,

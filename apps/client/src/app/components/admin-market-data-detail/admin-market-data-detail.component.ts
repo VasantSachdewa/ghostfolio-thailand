@@ -1,3 +1,11 @@
+import { UserService } from '@ghostfolio/client/services/user/user.service';
+import {
+  DATE_FORMAT,
+  getDateFormatString,
+  getLocale
+} from '@ghostfolio/common/helper';
+import { LineChartItem, User } from '@ghostfolio/common/interfaces';
+
 import {
   ChangeDetectionStrategy,
   Component,
@@ -8,13 +16,6 @@ import {
   Output
 } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
-import { UserService } from '@ghostfolio/client/services/user/user.service';
-import {
-  DATE_FORMAT,
-  getDateFormatString,
-  getLocale
-} from '@ghostfolio/common/helper';
-import { LineChartItem, User } from '@ghostfolio/common/interfaces';
 import { DataSource, MarketData } from '@prisma/client';
 import {
   addDays,
@@ -83,10 +84,10 @@ export class AdminMarketDataDetailComponent implements OnChanges, OnInit {
   public ngOnChanges() {
     this.defaultDateFormat = getDateFormatString(this.locale);
 
-    this.historicalDataItems = this.marketData.map((marketDataItem) => {
+    this.historicalDataItems = this.marketData.map(({ date, marketPrice }) => {
       return {
-        date: format(marketDataItem.date, DATE_FORMAT),
-        value: marketDataItem.marketPrice
+        date: format(date, DATE_FORMAT),
+        value: marketPrice
       };
     });
 
@@ -154,12 +155,8 @@ export class AdminMarketDataDetailComponent implements OnChanges, OnInit {
     day: string;
     yearMonth: string;
   }) {
-    const date = new Date(`${yearMonth}-${day}`);
+    const date = parseISO(`${yearMonth}-${day}`);
     const marketPrice = this.marketDataByMonth[yearMonth]?.[day]?.marketPrice;
-
-    if (isSameDay(date, new Date())) {
-      return;
-    }
 
     const dialogRef = this.dialog.open(MarketDataDetailDialog, {
       data: <MarketDataDetailDialogParams>{
@@ -177,7 +174,7 @@ export class AdminMarketDataDetailComponent implements OnChanges, OnInit {
     dialogRef
       .afterClosed()
       .pipe(takeUntil(this.unsubscribeSubject))
-      .subscribe(({ withRefresh }) => {
+      .subscribe(({ withRefresh } = { withRefresh: false }) => {
         this.marketDataChanged.next(withRefresh);
       });
   }

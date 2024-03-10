@@ -10,10 +10,12 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
+  IsISO4217CurrencyCode,
   IsISO8601,
   IsNumber,
   IsOptional,
-  IsString
+  IsString,
+  Min
 } from 'class-validator';
 import { isString } from 'lodash';
 
@@ -37,7 +39,7 @@ export class CreateOrderDto {
   )
   comment?: string;
 
-  @IsString()
+  @IsISO4217CurrencyCode()
   currency: string;
 
   @IsOptional()
@@ -48,9 +50,11 @@ export class CreateOrderDto {
   date: string;
 
   @IsNumber()
+  @Min(0)
   fee: number;
 
   @IsNumber()
+  @Min(0)
   quantity: number;
 
   @IsString()
@@ -64,6 +68,7 @@ export class CreateOrderDto {
   type: Type;
 
   @IsNumber()
+  @Min(0)
   unitPrice: number;
 
   @IsBoolean()

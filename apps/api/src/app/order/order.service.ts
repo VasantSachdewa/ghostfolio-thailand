@@ -7,8 +7,10 @@ import {
   GATHER_ASSET_PROFILE_PROCESS,
   GATHER_ASSET_PROFILE_PROCESS_OPTIONS
 } from '@ghostfolio/common/config';
-import { Filter } from '@ghostfolio/common/interfaces';
+import { getAssetProfileIdentifier } from '@ghostfolio/common/helper';
+import { Filter, UniqueAsset } from '@ghostfolio/common/interfaces';
 import { OrderWithAccount } from '@ghostfolio/common/types';
+
 import { Injectable } from '@nestjs/common';
 import {
   AssetClass,
@@ -17,14 +19,14 @@ import {
   Order,
   Prisma,
   Tag,
-  Type as TypeOfOrder
+  Type as ActivityType
 } from '@prisma/client';
 import Big from 'big.js';
 import { endOfToday, isAfter } from 'date-fns';
 import { groupBy } from 'lodash';
 import { v4 as uuidv4 } from 'uuid';
 
-import { Activity } from './interfaces/activities.interface';
+import { Activities } from './interfaces/activities.interface';
 
 @Injectable()
 export class OrderService {
@@ -35,34 +37,6 @@ export class OrderService {
     private readonly prismaService: PrismaService,
     private readonly symbolProfileService: SymbolProfileService
   ) {}
-
-  public async order(
-    orderWhereUniqueInput: Prisma.OrderWhereUniqueInput
-  ): Promise<Order | null> {
-    return this.prismaService.order.findUnique({
-      where: orderWhereUniqueInput
-    });
-  }
-
-  public async orders(params: {
-    include?: Prisma.OrderInclude;
-    skip?: number;
-    take?: number;
-    cursor?: Prisma.OrderWhereUniqueInput;
-    where?: Prisma.OrderWhereInput;
-    orderBy?: Prisma.OrderOrderByWithRelationInput;
-  }): Promise<OrderWithAccount[]> {
-    const { include, skip, take, cursor, where, orderBy } = params;
-
-    return this.prismaService.order.findMany({
-      cursor,
-      include,
-      orderBy,
-      skip,
-      take,
-      where
-    });
-  }
 
   public async createOrder(
     data: Prisma.OrderCreateInput & {
@@ -96,7 +70,7 @@ export class OrderService {
     const updateAccountBalance = data.updateAccountBalance ?? false;
     const userId = data.userId;
 
-    if (data.type === 'ITEM' || data.type === 'LIABILITY') {
+    if (['FEE', 'INTEREST', 'ITEM', 'LIABILITY'].includes(data.type)) {
       const assetClass = data.assetClass;
       const assetSubClass = data.assetSubClass;
       currency = data.SymbolProfile.connectOrCreate.create.currency;
@@ -117,32 +91,21 @@ export class OrderService {
       };
     }
 
-    await this.dataGatheringService.addJobToQueue({
-      data: {
-        dataSource: data.SymbolProfile.connectOrCreate.create.dataSource,
-        symbol: data.SymbolProfile.connectOrCreate.create.symbol
-      },
-      name: GATHER_ASSET_PROFILE_PROCESS,
-      opts: {
-        ...GATHER_ASSET_PROFILE_PROCESS_OPTIONS,
-        jobId: `${data.SymbolProfile.connectOrCreate.create.dataSource}-${data.SymbolProfile.connectOrCreate.create.symbol}`
-      }
-    });
-
-    const isDraft =
-      data.type === 'LIABILITY'
-        ? false
-        : isAfter(data.date as Date, endOfToday());
-
-    if (!isDraft) {
-      // Gather symbol data of order in the background, if not draft
-      this.dataGatheringService.gatherSymbols([
-        {
+    if (data.SymbolProfile.connectOrCreate.create.dataSource !== 'MANUAL') {
+      this.dataGatheringService.addJobToQueue({
+        data: {
           dataSource: data.SymbolProfile.connectOrCreate.create.dataSource,
-          date: <Date>data.date,
           symbol: data.SymbolProfile.connectOrCreate.create.symbol
+        },
+        name: GATHER_ASSET_PROFILE_PROCESS,
+        opts: {
+          ...GATHER_ASSET_PROFILE_PROCESS_OPTIONS,
+          jobId: getAssetProfileIdentifier({
+            dataSource: data.SymbolProfile.connectOrCreate.create.dataSource,
+            symbol: data.SymbolProfile.connectOrCreate.create.symbol
+          })
         }
-      ]);
+      });
     }
 
     delete data.accountId;
@@ -161,6 +124,10 @@ export class OrderService {
     delete data.userId;
 
     const orderData: Prisma.OrderCreateInput = data;
+
+    const isDraft = ['FEE', 'INTEREST', 'ITEM', 'LIABILITY'].includes(data.type)
+      ? false
+      : isAfter(data.date as Date, endOfToday());
 
     const order = await this.prismaService.order.create({
       data: {
@@ -204,7 +171,7 @@ export class OrderService {
       where
     });
 
-    if (order.type === 'ITEM' || order.type === 'LIABILITY') {
+    if (['FEE', 'INTEREST', 'ITEM', 'LIABILITY'].includes(order.type)) {
       await this.symbolProfileService.deleteById(order.symbolProfileId);
     }
 
@@ -219,9 +186,24 @@ export class OrderService {
     return count;
   }
 
+  public async getLatestOrder({ dataSource, symbol }: UniqueAsset) {
+    return this.prismaService.order.findFirst({
+      orderBy: {
+        date: 'desc'
+      },
+      where: {
+        SymbolProfile: { dataSource, symbol }
+      }
+    });
+  }
+
   public async getOrders({
     filters,
     includeDrafts = false,
+    skip,
+    sortColumn,
+    sortDirection,
+    take = Number.MAX_SAFE_INTEGER,
     types,
     userCurrency,
     userId,
@@ -229,11 +211,18 @@ export class OrderService {
   }: {
     filters?: Filter[];
     includeDrafts?: boolean;
-    types?: TypeOfOrder[];
+    skip?: number;
+    sortColumn?: string;
+    sortDirection?: Prisma.SortOrder;
+    take?: number;
+    types?: ActivityType[];
     userCurrency: string;
     userId: string;
     withExcludedAccounts?: boolean;
-  }): Promise<Activity[]> {
+  }): Promise<Activities> {
+    let orderBy: Prisma.Enumerable<Prisma.OrderOrderByWithRelationInput> = [
+      { date: 'asc' }
+    ];
     const where: Prisma.OrderWhereInput = { userId };
 
     const {
@@ -295,18 +284,26 @@ export class OrderService {
       };
     }
 
-    if (types) {
-      where.OR = types.map((type) => {
-        return {
-          type: {
-            equals: type
-          }
-        };
-      });
+    if (sortColumn) {
+      orderBy = [{ [sortColumn]: sortDirection }];
     }
 
-    return (
-      await this.orders({
+    if (types) {
+      where.type = { in: types };
+    }
+
+    if (withExcludedAccounts === false) {
+      where.OR = [
+        { Account: null },
+        { Account: { NOT: { isExcluded: true } } }
+      ];
+    }
+
+    const [orders, count] = await Promise.all([
+      this.orders({
+        orderBy,
+        skip,
+        take,
         where,
         include: {
           // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -318,35 +315,41 @@ export class OrderService {
           // eslint-disable-next-line @typescript-eslint/naming-convention
           SymbolProfile: true,
           tags: true
-        },
-        orderBy: { date: 'asc' }
-      })
-    )
-      .filter((order) => {
-        return (
-          withExcludedAccounts ||
-          !order.Account ||
-          order.Account?.isExcluded === false
-        );
-      })
-      .map((order) => {
-        const value = new Big(order.quantity).mul(order.unitPrice).toNumber();
+        }
+      }),
+      this.prismaService.order.count({ where })
+    ]);
 
-        return {
-          ...order,
+    const activities = orders.map((order) => {
+      const value = new Big(order.quantity).mul(order.unitPrice).toNumber();
+
+      return {
+        ...order,
+        value,
+        // TODO: Use exchange rate of date
+        feeInBaseCurrency: this.exchangeRateDataService.toCurrency(
+          order.fee,
+          order.SymbolProfile.currency,
+          userCurrency
+        ),
+        // TODO: Use exchange rate of date
+        valueInBaseCurrency: this.exchangeRateDataService.toCurrency(
           value,
-          feeInBaseCurrency: this.exchangeRateDataService.toCurrency(
-            order.fee,
-            order.SymbolProfile.currency,
-            userCurrency
-          ),
-          valueInBaseCurrency: this.exchangeRateDataService.toCurrency(
-            value,
-            order.SymbolProfile.currency,
-            userCurrency
-          )
-        };
-      });
+          order.SymbolProfile.currency,
+          userCurrency
+        )
+      };
+    });
+
+    return { activities, count };
+  }
+
+  public async order(
+    orderWhereUniqueInput: Prisma.OrderWhereUniqueInput
+  ): Promise<Order | null> {
+    return this.prismaService.order.findUnique({
+      where: orderWhereUniqueInput
+    });
   }
 
   public async updateOrder({
@@ -360,13 +363,10 @@ export class OrderService {
       dataSource?: DataSource;
       symbol?: string;
       tags?: Tag[];
+      type?: ActivityType;
     };
     where: Prisma.OrderWhereUniqueInput;
   }): Promise<Order> {
-    if (data.Account.connect.id_userId.id === null) {
-      delete data.Account;
-    }
-
     if (!data.comment) {
       data.comment = null;
     }
@@ -375,8 +375,12 @@ export class OrderService {
 
     let isDraft = false;
 
-    if (data.type === 'ITEM' || data.type === 'LIABILITY') {
+    if (['FEE', 'INTEREST', 'ITEM', 'LIABILITY'].includes(data.type)) {
       delete data.SymbolProfile.connect;
+
+      if (data.Account?.connect?.id_userId?.id === null) {
+        data.Account = { disconnect: true };
+      }
     } else {
       delete data.SymbolProfile.update;
 
@@ -417,6 +421,26 @@ export class OrderService {
           })
         }
       },
+      where
+    });
+  }
+
+  private async orders(params: {
+    include?: Prisma.OrderInclude;
+    skip?: number;
+    take?: number;
+    cursor?: Prisma.OrderWhereUniqueInput;
+    where?: Prisma.OrderWhereInput;
+    orderBy?: Prisma.Enumerable<Prisma.OrderOrderByWithRelationInput>;
+  }): Promise<OrderWithAccount[]> {
+    const { include, skip, take, cursor, where, orderBy } = params;
+
+    return this.prismaService.order.findMany({
+      cursor,
+      include,
+      orderBy,
+      skip,
+      take,
       where
     });
   }

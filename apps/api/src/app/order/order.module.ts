@@ -1,3 +1,4 @@
+import { AccountBalanceService } from '@ghostfolio/api/app/account-balance/account-balance.service';
 import { AccountService } from '@ghostfolio/api/app/account/account.service';
 import { CacheModule } from '@ghostfolio/api/app/cache/cache.module';
 import { RedisCacheModule } from '@ghostfolio/api/app/redis-cache/redis-cache.module';
@@ -10,6 +11,7 @@ import { ExchangeRateDataModule } from '@ghostfolio/api/services/exchange-rate-d
 import { ImpersonationModule } from '@ghostfolio/api/services/impersonation/impersonation.module';
 import { PrismaModule } from '@ghostfolio/api/services/prisma/prisma.module';
 import { SymbolProfileModule } from '@ghostfolio/api/services/symbol-profile/symbol-profile.module';
+
 import { Module } from '@nestjs/common';
 
 import { OrderController } from './order.controller';
@@ -31,6 +33,6 @@ import { OrderService } from './order.service';
     SymbolProfileModule,
     UserModule
   ],
-  providers: [AccountService, OrderService]
+  providers: [AccountBalanceService, AccountService, OrderService]
 })
 export class OrderModule {}

@@ -1,7 +1,8 @@
+import { GfPremiumIndicatorModule } from '@ghostfolio/ui/premium-indicator';
+
 import { Component } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { RouterModule } from '@angular/router';
-import { GfPremiumIndicatorModule } from '@ghostfolio/ui/premium-indicator';
 
 @Component({
   host: { class: 'page' },
@@ -11,5 +12,6 @@ import { GfPremiumIndicatorModule } from '@ghostfolio/ui/premium-indicator';
   templateUrl: './black-friday-2022-page.html'
 })
 export class BlackFriday2022PageComponent {
-  public constructor() {}
+  public routerLinkFeatures = ['/' + $localize`features`];
+  public routerLinkPricing = ['/' + $localize`pricing`];
 }

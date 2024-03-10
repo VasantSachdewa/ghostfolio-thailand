@@ -1,3 +1,6 @@
+import { GfSymbolModule } from '@ghostfolio/client/pipes/symbol/symbol.module';
+import { GfActivitiesFilterModule } from '@ghostfolio/ui/activities-filter/activities-filter.module';
+
 import { CommonModule } from '@angular/common';
 import { CUSTOM_ELEMENTS_SCHEMA, NgModule } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
@@ -6,7 +9,6 @@ import { MatPaginatorModule } from '@angular/material/paginator';
 import { MatSortModule } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
 import { RouterModule } from '@angular/router';
-import { GfActivitiesFilterModule } from '@ghostfolio/ui/activities-filter/activities-filter.module';
 import { NgxSkeletonLoaderModule } from 'ngx-skeleton-loader';
 
 import { AdminMarketDataComponent } from './admin-market-data.component';
@@ -20,6 +22,7 @@ import { GfCreateAssetProfileDialogModule } from './create-asset-profile-dialog/
     GfActivitiesFilterModule,
     GfAssetProfileDialogModule,
     GfCreateAssetProfileDialogModule,
+    GfSymbolModule,
     MatButtonModule,
     MatMenuModule,
     MatPaginatorModule,

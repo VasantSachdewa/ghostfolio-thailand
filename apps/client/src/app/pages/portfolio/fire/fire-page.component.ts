@@ -1,16 +1,16 @@
-import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { DataService } from '@ghostfolio/client/services/data.service';
 import { ImpersonationStorageService } from '@ghostfolio/client/services/impersonation-storage.service';
 import { UserService } from '@ghostfolio/client/services/user/user.service';
 import { PortfolioReportRule, User } from '@ghostfolio/common/interfaces';
 import { hasPermission, permissions } from '@ghostfolio/common/permissions';
+
+import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import Big from 'big.js';
 import { DeviceDetectorService } from 'ngx-device-detector';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
 @Component({
-  host: { class: 'page' },
   selector: 'gf-fire-page',
   styleUrls: ['./fire-page.scss'],
   templateUrl: './fire-page.html'
@@ -19,6 +19,7 @@ export class FirePageComponent implements OnDestroy, OnInit {
   public accountClusterRiskRules: PortfolioReportRule[];
   public currencyClusterRiskRules: PortfolioReportRule[];
   public deviceType: string;
+  public emergencyFundRules: PortfolioReportRule[];
   public feeRules: PortfolioReportRule[];
   public fireWealth: Big;
   public hasImpersonationId: boolean;
@@ -44,14 +45,12 @@ export class FirePageComponent implements OnDestroy, OnInit {
     this.deviceType = this.deviceService.getDeviceInfo().deviceType;
 
     this.dataService
-      .fetchPortfolioDetails({})
+      .fetchPortfolioDetails()
       .pipe(takeUntil(this.unsubscribeSubject))
       .subscribe(({ summary }) => {
-        if (summary.cash === null || summary.currentValue === null) {
-          return;
-        }
-
-        this.fireWealth = new Big(summary.currentValue);
+        this.fireWealth = summary.fireWealth
+          ? new Big(summary.fireWealth)
+          : new Big(10000);
         this.withdrawalRatePerYear = this.fireWealth.mul(4).div(100);
         this.withdrawalRatePerMonth = this.withdrawalRatePerYear.div(12);
 
@@ -68,6 +67,8 @@ export class FirePageComponent implements OnDestroy, OnInit {
           portfolioReport.rules['accountClusterRisk'] || null;
         this.currencyClusterRiskRules =
           portfolioReport.rules['currencyClusterRisk'] || null;
+        this.emergencyFundRules =
+          portfolioReport.rules['emergencyFund'] || null;
         this.feeRules = portfolioReport.rules['fees'] || null;
 
         this.changeDetectorRef.markForCheck();
@@ -91,10 +92,13 @@ export class FirePageComponent implements OnDestroy, OnInit {
             permissions.createOrder
           );
 
-          this.hasPermissionToUpdateUserSettings = hasPermission(
-            this.user.permissions,
-            permissions.updateUserSettings
-          );
+          this.hasPermissionToUpdateUserSettings =
+            this.user.subscription?.type === 'Basic'
+              ? false
+              : hasPermission(
+                  this.user.permissions,
+                  permissions.updateUserSettings
+                );
 
           this.changeDetectorRef.markForCheck();
         }

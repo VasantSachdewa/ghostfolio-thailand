@@ -1,10 +1,11 @@
-import { HttpClient } from '@angular/common/http';
-import { Injectable } from '@angular/core';
 import { CreateAccountDto } from '@ghostfolio/api/app/account/create-account.dto';
 import { CreateOrderDto } from '@ghostfolio/api/app/order/create-order.dto';
 import { Activity } from '@ghostfolio/api/app/order/interfaces/activities.interface';
-import { Account, DataSource, Type } from '@prisma/client';
-import { isMatch, parse, parseISO } from 'date-fns';
+import { parseDate as parseDateHelper } from '@ghostfolio/common/helper';
+
+import { HttpClient } from '@angular/common/http';
+import { Injectable } from '@angular/core';
+import { Account, DataSource, Type as ActivityType } from '@prisma/client';
 import { isFinite } from 'lodash';
 import { parse as csvToJson } from 'papaparse';
 import { EMPTY } from 'rxjs';
@@ -15,6 +16,7 @@ import { catchError } from 'rxjs/operators';
 })
 export class ImportActivitiesService {
   private static ACCOUNT_KEYS = ['account', 'accountid'];
+  private static COMMENT_KEYS = ['comment', 'note'];
   private static CURRENCY_KEYS = ['ccy', 'currency', 'currencyprimary'];
   private static DATA_SOURCE_KEYS = ['datasource'];
   private static DATE_KEYS = ['date', 'tradedate'];
@@ -52,6 +54,7 @@ export class ImportActivitiesService {
     for (const [index, item] of content.entries()) {
       activities.push({
         accountId: this.parseAccount({ item, userAccounts }),
+        comment: this.parseComment({ item }),
         currency: this.parseCurrency({ content, index, item }),
         dataSource: this.parseDataSource({ item }),
         date: this.parseDate({ content, index, item }),
@@ -122,6 +125,7 @@ export class ImportActivitiesService {
 
   private convertToCreateOrderDto({
     accountId,
+    comment,
     date,
     fee,
     quantity,
@@ -132,6 +136,7 @@ export class ImportActivitiesService {
   }: Activity): CreateOrderDto {
     return {
       accountId,
+      comment,
       fee,
       quantity,
       type,
@@ -168,6 +173,18 @@ export class ImportActivitiesService {
             account.name.toLowerCase() === item[key].toLowerCase()
           );
         })?.id;
+      }
+    }
+
+    return undefined;
+  }
+
+  private parseComment({ item }: { item: any }) {
+    item = this.lowercaseKeys(item);
+
+    for (const key of ImportActivitiesService.COMMENT_KEYS) {
+      if (item[key]) {
+        return item[key];
       }
     }
 
@@ -219,31 +236,12 @@ export class ImportActivitiesService {
     item: any;
   }) {
     item = this.lowercaseKeys(item);
-    let date: string;
 
     for (const key of ImportActivitiesService.DATE_KEYS) {
       if (item[key]) {
-        if (isMatch(item[key], 'dd-MM-yyyy') && item[key].length === 10) {
-          // Check length to only match yyyy (and not yy)
-          date = parse(item[key], 'dd-MM-yyyy', new Date()).toISOString();
-        } else if (
-          isMatch(item[key], 'dd/MM/yyyy') &&
-          item[key].length === 10
-        ) {
-          // Check length to only match yyyy (and not yy)
-          date = parse(item[key], 'dd/MM/yyyy', new Date()).toISOString();
-        } else if (isMatch(item[key], 'yyyyMMdd') && item[key].length === 8) {
-          // Check length to only match yyyy (and not yy)
-          date = parse(item[key], 'yyyyMMdd', new Date()).toISOString();
-        } else {
-          try {
-            date = parseISO(item[key]).toISOString();
-          } catch {}
-        }
-
-        if (date) {
-          return date;
-        }
+        try {
+          return parseDateHelper(item[key].toString()).toISOString();
+        } catch {}
       }
     }
 
@@ -289,7 +287,7 @@ export class ImportActivitiesService {
 
     for (const key of ImportActivitiesService.QUANTITY_KEYS) {
       if (isFinite(item[key])) {
-        return item[key];
+        return Math.abs(item[key]);
       }
     }
 
@@ -330,22 +328,26 @@ export class ImportActivitiesService {
     content: any[];
     index: number;
     item: any;
-  }) {
+  }): ActivityType {
     item = this.lowercaseKeys(item);
 
     for (const key of ImportActivitiesService.TYPE_KEYS) {
       if (item[key]) {
         switch (item[key].toLowerCase()) {
           case 'buy':
-            return Type.BUY;
+            return 'BUY';
           case 'dividend':
-            return Type.DIVIDEND;
+            return 'DIVIDEND';
+          case 'fee':
+            return 'FEE';
+          case 'interest':
+            return 'INTEREST';
           case 'item':
-            return Type.ITEM;
+            return 'ITEM';
           case 'liability':
-            return Type.LIABILITY;
+            return 'LIABILITY';
           case 'sell':
-            return Type.SELL;
+            return 'SELL';
           default:
             break;
         }
@@ -371,7 +373,7 @@ export class ImportActivitiesService {
 
     for (const key of ImportActivitiesService.UNIT_PRICE_KEYS) {
       if (isFinite(item[key])) {
-        return item[key];
+        return Math.abs(item[key]);
       }
     }
 

@@ -1,5 +1,5 @@
-import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { ToggleComponent } from '@ghostfolio/client/components/toggle/toggle.component';
+import { LayoutService } from '@ghostfolio/client/core/layout.service';
 import { DataService } from '@ghostfolio/client/services/data.service';
 import { ImpersonationStorageService } from '@ghostfolio/client/services/impersonation-storage.service';
 import { UserService } from '@ghostfolio/client/services/user/user.service';
@@ -11,6 +11,8 @@ import {
 } from '@ghostfolio/common/interfaces';
 import { hasPermission, permissions } from '@ghostfolio/common/permissions';
 import { DateRange } from '@ghostfolio/common/types';
+
+import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { DeviceDetectorService } from 'ngx-device-detector';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -33,6 +35,7 @@ export class HomeOverviewComponent implements OnDestroy, OnInit {
   public isLoadingPerformance = true;
   public performance: PortfolioPerformance;
   public showDetails = false;
+  public unit: string;
   public user: User;
 
   private unsubscribeSubject = new Subject<void>();
@@ -42,6 +45,7 @@ export class HomeOverviewComponent implements OnDestroy, OnInit {
     private dataService: DataService,
     private deviceService: DeviceDetectorService,
     private impersonationStorageService: ImpersonationStorageService,
+    private layoutService: LayoutService,
     private userService: UserService
   ) {
     this.userService.stateChanged
@@ -72,10 +76,17 @@ export class HomeOverviewComponent implements OnDestroy, OnInit {
         this.changeDetectorRef.markForCheck();
       });
 
+    this.layoutService.shouldReloadContent$
+      .pipe(takeUntil(this.unsubscribeSubject))
+      .subscribe(() => {
+        this.update();
+      });
+
     this.showDetails =
-      !this.hasImpersonationId &&
       !this.user.settings.isRestrictedView &&
       this.user.settings.viewMode !== 'ZEN';
+
+    this.unit = this.showDetails ? this.user.settings.baseCurrency : '%';
   }
 
   public onChangeDateRange(dateRange: DateRange) {
@@ -116,10 +127,10 @@ export class HomeOverviewComponent implements OnDestroy, OnInit {
         this.isLoadingPerformance = false;
 
         this.historicalDataItems = chart.map(
-          ({ date, netPerformanceInPercentage }) => {
+          ({ date, netPerformanceInPercentageWithCurrencyEffect }) => {
             return {
               date,
-              value: netPerformanceInPercentage
+              value: netPerformanceInPercentageWithCurrencyEffect
             };
           }
         );

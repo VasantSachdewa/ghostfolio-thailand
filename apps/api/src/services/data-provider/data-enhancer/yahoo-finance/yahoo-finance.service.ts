@@ -1,38 +1,45 @@
 import { ConfigurationService } from '@ghostfolio/api/services/configuration/configuration.service';
 import { CryptocurrencyService } from '@ghostfolio/api/services/cryptocurrency/cryptocurrency.service';
 import { DataEnhancerInterface } from '@ghostfolio/api/services/data-provider/interfaces/data-enhancer.interface';
-import { UNKNOWN_KEY } from '@ghostfolio/common/config';
+import {
+  DEFAULT_CURRENCY,
+  REPLACE_NAME_PARTS,
+  UNKNOWN_KEY
+} from '@ghostfolio/common/config';
 import { isCurrency } from '@ghostfolio/common/helper';
+
 import { Injectable, Logger } from '@nestjs/common';
 import {
   AssetClass,
   AssetSubClass,
   DataSource,
+  Prisma,
   SymbolProfile
 } from '@prisma/client';
+import { isISIN } from 'class-validator';
 import { countries } from 'countries-list';
 import yahooFinance from 'yahoo-finance2';
 import type { Price } from 'yahoo-finance2/dist/esm/src/modules/quoteSummary-iface';
 
 @Injectable()
 export class YahooFinanceDataEnhancerService implements DataEnhancerInterface {
-  private baseCurrency: string;
-
   public constructor(
     private readonly configurationService: ConfigurationService,
     private readonly cryptocurrencyService: CryptocurrencyService
-  ) {
-    this.baseCurrency = this.configurationService.get('BASE_CURRENCY');
-  }
+  ) {}
 
   public convertFromYahooFinanceSymbol(aYahooFinanceSymbol: string) {
     let symbol = aYahooFinanceSymbol.replace(
-      new RegExp(`-${this.baseCurrency}$`),
-      this.baseCurrency
+      new RegExp(`-${DEFAULT_CURRENCY}$`),
+      DEFAULT_CURRENCY
     );
 
-    if (symbol.includes('=X') && !symbol.includes(this.baseCurrency)) {
-      symbol = `${this.baseCurrency}${symbol}`;
+    if (symbol.includes('=X') && !symbol.includes(DEFAULT_CURRENCY)) {
+      symbol = `${DEFAULT_CURRENCY}${symbol}`;
+    }
+
+    if (symbol.includes(`${DEFAULT_CURRENCY}ZAC`)) {
+      symbol = `${DEFAULT_CURRENCY}ZAc`;
     }
 
     return symbol.replace('=X', '');
@@ -47,21 +54,18 @@ export class YahooFinanceDataEnhancerService implements DataEnhancerInterface {
    */
   public convertToYahooFinanceSymbol(aSymbol: string) {
     if (
-      aSymbol.includes(this.baseCurrency) &&
-      aSymbol.length > this.baseCurrency.length
+      aSymbol.includes(DEFAULT_CURRENCY) &&
+      aSymbol.length > DEFAULT_CURRENCY.length
     ) {
       if (
         isCurrency(
-          aSymbol.substring(0, aSymbol.length - this.baseCurrency.length)
+          aSymbol.substring(0, aSymbol.length - DEFAULT_CURRENCY.length)
         )
       ) {
         return `${aSymbol}=X`;
       } else if (
         this.cryptocurrencyService.isCryptocurrency(
-          aSymbol.replace(
-            new RegExp(`-${this.baseCurrency}$`),
-            this.baseCurrency
-          )
+          aSymbol.replace(new RegExp(`-${DEFAULT_CURRENCY}$`), DEFAULT_CURRENCY)
         )
       ) {
         // Add a dash before the last three characters
@@ -69,8 +73,8 @@ export class YahooFinanceDataEnhancerService implements DataEnhancerInterface {
         // DOGEUSD -> DOGE-USD
         // SOL1USD -> SOL1-USD
         return aSymbol.replace(
-          new RegExp(`-?${this.baseCurrency}$`),
-          `-${this.baseCurrency}`
+          new RegExp(`-?${DEFAULT_CURRENCY}$`),
+          `-${DEFAULT_CURRENCY}`
         );
       }
     }
@@ -79,9 +83,11 @@ export class YahooFinanceDataEnhancerService implements DataEnhancerInterface {
   }
 
   public async enhance({
+    requestTimeout = this.configurationService.get('REQUEST_TIMEOUT'),
     response,
     symbol
   }: {
+    requestTimeout?: number;
     response: Partial<SymbolProfile>;
     symbol: string;
   }): Promise<Partial<SymbolProfile>> {
@@ -99,15 +105,14 @@ export class YahooFinanceDataEnhancerService implements DataEnhancerInterface {
         yahooSymbol = quotes[0].symbol;
       }
 
-      const { countries, sectors, url } = await this.getAssetProfile(
-        yahooSymbol
-      );
+      const { countries, sectors, url } =
+        await this.getAssetProfile(yahooSymbol);
 
-      if (countries) {
+      if ((countries as unknown as Prisma.JsonArray)?.length > 0) {
         response.countries = countries;
       }
 
-      if (sectors) {
+      if ((sectors as unknown as Prisma.JsonArray)?.length > 0) {
         response.sectors = sectors;
       }
 
@@ -137,18 +142,11 @@ export class YahooFinanceDataEnhancerService implements DataEnhancerInterface {
     if (name) {
       name = name.replace('&amp;', '&');
 
-      name = name.replace('Amundi Index Solutions - ', '');
-      name = name.replace('iShares ETF (CH) - ', '');
-      name = name.replace('iShares III Public Limited Company - ', '');
-      name = name.replace('iShares V PLC - ', '');
-      name = name.replace('iShares VI Public Limited Company - ', '');
-      name = name.replace('iShares VII PLC - ', '');
-      name = name.replace('Multi Units Luxembourg - ', '');
-      name = name.replace('VanEck ETFs N.V. - ', '');
-      name = name.replace('Vaneck Vectors Ucits Etfs Plc - ', '');
-      name = name.replace('Vanguard Funds Public Limited Company - ', '');
-      name = name.replace('Vanguard Index Funds - ', '');
-      name = name.replace('Xtrackers (IE) Plc - ', '');
+      for (const part of REPLACE_NAME_PARTS) {
+        name = name.replace(part, '');
+      }
+
+      name = name.trim();
     }
 
     if (quoteType === 'FUTURE') {
@@ -165,7 +163,20 @@ export class YahooFinanceDataEnhancerService implements DataEnhancerInterface {
     const response: Partial<SymbolProfile> = {};
 
     try {
-      const symbol = this.convertToYahooFinanceSymbol(aSymbol);
+      let symbol = aSymbol;
+
+      if (isISIN(symbol)) {
+        try {
+          const { quotes } = await yahooFinance.search(symbol);
+
+          if (quotes.length === 1) {
+            symbol = quotes[0].symbol;
+          }
+        } catch {}
+      } else {
+        symbol = this.convertToYahooFinanceSymbol(symbol);
+      }
+
       const assetProfile = await yahooFinance.quoteSummary(symbol, {
         modules: ['price', 'summaryProfile', 'topHoldings']
       });
@@ -185,7 +196,9 @@ export class YahooFinanceDataEnhancerService implements DataEnhancerInterface {
         shortName: assetProfile.price.shortName,
         symbol: assetProfile.price.symbol
       });
-      response.symbol = aSymbol;
+      response.symbol = this.convertFromYahooFinanceSymbol(
+        assetProfile.price.symbol
+      );
 
       if (assetSubClass === AssetSubClass.MUTUALFUND) {
         response.sectors = [];
@@ -232,6 +245,10 @@ export class YahooFinanceDataEnhancerService implements DataEnhancerInterface {
 
   public getName() {
     return DataSource.YAHOO;
+  }
+
+  public getTestSymbol() {
+    return 'AAPL';
   }
 
   public parseAssetClass({

@@ -1,6 +1,12 @@
 import { LookupItem } from '@ghostfolio/api/app/symbol/interfaces/lookup-item.interface';
 import { ConfigurationService } from '@ghostfolio/api/services/configuration/configuration.service';
-import { DataProviderInterface } from '@ghostfolio/api/services/data-provider/interfaces/data-provider.interface';
+import {
+  DataProviderInterface,
+  GetDividendsParams,
+  GetHistoricalParams,
+  GetQuotesParams,
+  GetSearchParams
+} from '@ghostfolio/api/services/data-provider/interfaces/data-provider.interface';
 import {
   IDataProviderHistoricalResponse,
   IDataProviderResponse
@@ -8,7 +14,8 @@ import {
 import { PrismaService } from '@ghostfolio/api/services/prisma/prisma.service';
 import { SymbolProfileService } from '@ghostfolio/api/services/symbol-profile/symbol-profile.service';
 import { DATE_FORMAT, parseDate } from '@ghostfolio/common/helper';
-import { Granularity } from '@ghostfolio/common/types';
+import { DataProviderInfo } from '@ghostfolio/common/interfaces';
+
 import { Injectable, Logger } from '@nestjs/common';
 import { DataSource, SymbolProfile } from '@prisma/client';
 import { format } from 'date-fns';
@@ -26,40 +33,35 @@ export class GoogleSheetsService implements DataProviderInterface {
     return true;
   }
 
-  public async getAssetProfile(
-    aSymbol: string
-  ): Promise<Partial<SymbolProfile>> {
+  public async getAssetProfile({
+    symbol
+  }: {
+    symbol: string;
+  }): Promise<Partial<SymbolProfile>> {
     return {
-      dataSource: this.getName(),
-      symbol: aSymbol
+      symbol,
+      dataSource: this.getName()
     };
   }
 
-  public async getDividends({
-    from,
-    granularity = 'day',
-    symbol,
-    to
-  }: {
-    from: Date;
-    granularity: Granularity;
-    symbol: string;
-    to: Date;
-  }) {
+  public getDataProviderInfo(): DataProviderInfo {
+    return {
+      isPremium: false
+    };
+  }
+
+  public async getDividends({}: GetDividendsParams) {
     return {};
   }
 
-  public async getHistorical(
-    aSymbol: string,
-    aGranularity: Granularity = 'day',
-    from: Date,
-    to: Date
-  ): Promise<{
+  public async getHistorical({
+    from,
+    symbol,
+    to
+  }: GetHistoricalParams): Promise<{
     [symbol: string]: { [date: string]: IDataProviderHistoricalResponse };
   }> {
     try {
-      const symbol = aSymbol;
-
       const sheet = await this.getSheet({
         symbol,
         sheetId: this.configurationService.get('GOOGLE_SHEETS_ID')
@@ -87,7 +89,7 @@ export class GoogleSheetsService implements DataProviderInterface {
       };
     } catch (error) {
       throw new Error(
-        `Could not get historical market data for ${aSymbol} (${this.getName()}) from ${format(
+        `Could not get historical market data for ${symbol} (${this.getName()}) from ${format(
           from,
           DATE_FORMAT
         )} to ${format(to, DATE_FORMAT)}: [${error.name}] ${error.message}`
@@ -99,18 +101,18 @@ export class GoogleSheetsService implements DataProviderInterface {
     return DataSource.GOOGLE_SHEETS;
   }
 
-  public async getQuotes(
-    aSymbols: string[]
-  ): Promise<{ [symbol: string]: IDataProviderResponse }> {
-    if (aSymbols.length <= 0) {
-      return {};
+  public async getQuotes({
+    symbols
+  }: GetQuotesParams): Promise<{ [symbol: string]: IDataProviderResponse }> {
+    const response: { [symbol: string]: IDataProviderResponse } = {};
+
+    if (symbols.length <= 0) {
+      return response;
     }
 
     try {
-      const response: { [symbol: string]: IDataProviderResponse } = {};
-
       const symbolProfiles = await this.symbolProfileService.getSymbolProfiles(
-        aSymbols.map((symbol) => {
+        symbols.map((symbol) => {
           return {
             symbol,
             dataSource: this.getName()
@@ -129,7 +131,7 @@ export class GoogleSheetsService implements DataProviderInterface {
         const marketPrice = parseFloat(row['marketPrice']);
         const symbol = row['symbol'];
 
-        if (aSymbols.includes(symbol)) {
+        if (symbols.includes(symbol)) {
           response[symbol] = {
             marketPrice,
             currency: symbolProfiles.find((symbolProfile) => {
@@ -154,12 +156,8 @@ export class GoogleSheetsService implements DataProviderInterface {
   }
 
   public async search({
-    includeIndices = false,
     query
-  }: {
-    includeIndices?: boolean;
-    query: string;
-  }): Promise<{ items: LookupItem[] }> {
+  }: GetSearchParams): Promise<{ items: LookupItem[] }> {
     const items = await this.prismaService.symbolProfile.findMany({
       select: {
         assetClass: true,
@@ -189,7 +187,11 @@ export class GoogleSheetsService implements DataProviderInterface {
       }
     });
 
-    return { items };
+    return {
+      items: items.map((item) => {
+        return { ...item, dataProviderInfo: this.getDataProviderInfo() };
+      })
+    };
   }
 
   private async getSheet({

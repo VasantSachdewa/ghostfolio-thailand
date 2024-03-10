@@ -1,7 +1,9 @@
 <div class="container">
   <div class="mb-5 row">
     <div class="col">
-      <h3 class="d-none d-sm-block mb-3 text-center">About Ghostfolio</h3>
+      <h1 class="d-none d-sm-block h3 mb-4 text-center">
+        <ng-container i18n>About Ghostfolio</ng-container>
+      </h1>
       <div class="about-container">
         <p>
           Ghostfolio is a lightweight wealth management application for
@@ -33,9 +35,6 @@
             title="Contributors to Ghostfolio"
             >contributors</a
           >.
-          <ng-container *ngIf="version">
-            This instance is running Ghostfolio {{ version }}.
-          </ng-container>
           <ng-container *ngIf="hasPermissionForSubscription"
             >Check the system status at
             <a href="https://status.ghostfol.io" title="Ghostfolio Status"
@@ -46,22 +45,22 @@
         <p>
           If you encounter a bug or would like to suggest an improvement or a
           new
-          <a [routerLink]="['/features']">feature</a>, please join the
+          <a [routerLink]="routerLinkFeatures">feature</a>, please join the
           Ghostfolio
           <a
             href="https://join.slack.com/t/ghostfolio/shared_invite/zt-vsaan64h-F_I0fEo5M0P88lP9ibCxFg"
             title="Join the Ghostfolio Slack community"
             >Slack</a
           >
-          community, tweet to
+          community, post to
           <a
             href="https://twitter.com/ghostfolio_"
-            title="Tweet to Ghostfolio on Twitter"
-            >@ghostfolio_</a
+            title="Post to Ghostfolio on X (formerly Twitter)"
+            >&#64;ghostfolio_</a
           ><ng-container *ngIf="user?.subscription?.type === 'Premium'"
             >, send an e-mail to
             <a href="mailto:hi@ghostfol.io" title="Send an e-mail"
-              >hi@ghostfol.io</a
+              >hi&#64;ghostfol.io</a
             ></ng-container
           >
           or start a discussion at
@@ -71,14 +70,14 @@
             >GitHub</a
           >.
         </p>
-        <p class="text-center">
+        <p class="align-items-center d-flex justify-content-center">
           <a
             class="mx-2"
             href="https://twitter.com/ghostfolio_"
             mat-icon-button
-            title="Follow Ghostfolio on Twitter"
+            title="Follow Ghostfolio on X (formerly Twitter)"
           >
-            <ion-icon name="logo-twitter"></ion-icon>
+            <span class="line-height-1 text-center w-100">𝕏</span>
           </a>
           <a
             *ngIf="user?.subscription?.type === 'Premium'"
@@ -87,7 +86,7 @@
             mat-icon-button
             title="Send an e-mail"
           >
-            <ion-icon name="mail"></ion-icon>
+            <ion-icon name="mail" />
           </a>
           <a
             class="mx-2"
@@ -95,7 +94,7 @@
             mat-icon-button
             title="Join the Ghostfolio Slack community"
           >
-            <ion-icon name="logo-slack"></ion-icon>
+            <ion-icon name="logo-slack" />
           </a>
           <a
             class="mx-2"
@@ -103,7 +102,7 @@
             mat-icon-button
             title="Find Ghostfolio on GitHub"
           >
-            <ion-icon name="logo-github"></ion-icon>
+            <ion-icon name="logo-github" />
           </a>
         </p>
         <div
@@ -134,23 +133,29 @@
   </div>
 
   <div class="row">
-    <div *ngIf="hasPermissionForSubscription" class="col-md-6 col-xs-12 my-2">
+    <div
+      class="col-md-6 col-xs-12 my-2"
+      [ngClass]="{ 'offset-md-3': hasPermissionForSubscription === false }"
+    >
       <a
         class="py-4 w-100"
         color="primary"
+        i18n
         mat-flat-button
-        [routerLink]="['/faq']"
+        [routerLink]="routerLinkFaq"
         >Frequently Asked Questions (FAQ)</a
       >
     </div>
-    <div *ngIf="hasPermissionForBlog" class="col-md-6 col-xs-12 my-2">
-      <a
-        class="py-4 w-100"
-        color="primary"
-        mat-flat-button
-        [routerLink]="['/blog']"
-        >Blog</a
-      >
-    </div>
+    @if (hasPermissionForSubscription) {
+      <div class="col-md-6 col-xs-12 my-2">
+        <a
+          class="py-4 w-100"
+          color="primary"
+          mat-flat-button
+          [routerLink]="['/blog']"
+          >Blog</a
+        >
+      </div>
+    }
   </div>
 </div>

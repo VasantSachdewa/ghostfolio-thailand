@@ -1,81 +1,92 @@
 import { LookupItem } from '@ghostfolio/api/app/symbol/interfaces/lookup-item.interface';
 import { ConfigurationService } from '@ghostfolio/api/services/configuration/configuration.service';
-import { DataProviderInterface } from '@ghostfolio/api/services/data-provider/interfaces/data-provider.interface';
+import {
+  DataProviderInterface,
+  GetDividendsParams,
+  GetHistoricalParams,
+  GetQuotesParams,
+  GetSearchParams
+} from '@ghostfolio/api/services/data-provider/interfaces/data-provider.interface';
 import {
   IDataProviderHistoricalResponse,
   IDataProviderResponse
 } from '@ghostfolio/api/services/interfaces/interfaces';
+import { DEFAULT_CURRENCY } from '@ghostfolio/common/config';
 import { DATE_FORMAT, parseDate } from '@ghostfolio/common/helper';
 import { DataProviderInfo } from '@ghostfolio/common/interfaces';
-import { Granularity } from '@ghostfolio/common/types';
+
 import { Injectable, Logger } from '@nestjs/common';
 import { DataSource, SymbolProfile } from '@prisma/client';
-import bent from 'bent';
 import { format, isAfter, isBefore, isSameDay } from 'date-fns';
+import got from 'got';
 
 @Injectable()
 export class FinancialModelingPrepService implements DataProviderInterface {
   private apiKey: string;
-  private baseCurrency: string;
   private readonly URL = 'https://financialmodelingprep.com/api/v3';
 
   public constructor(
     private readonly configurationService: ConfigurationService
   ) {
     this.apiKey = this.configurationService.get(
-      'FINANCIAL_MODELING_PREP_API_KEY'
+      'API_KEY_FINANCIAL_MODELING_PREP'
     );
-    this.baseCurrency = this.configurationService.get('BASE_CURRENCY');
   }
 
   public canHandle(symbol: string) {
     return true;
   }
 
-  public async getAssetProfile(
-    aSymbol: string
-  ): Promise<Partial<SymbolProfile>> {
+  public async getAssetProfile({
+    symbol
+  }: {
+    symbol: string;
+  }): Promise<Partial<SymbolProfile>> {
     return {
-      dataSource: this.getName(),
-      symbol: aSymbol
+      symbol,
+      dataSource: this.getName()
     };
   }
 
-  public async getDividends({
-    from,
-    granularity = 'day',
-    symbol,
-    to
-  }: {
-    from: Date;
-    granularity: Granularity;
-    symbol: string;
-    to: Date;
-  }) {
+  public getDataProviderInfo(): DataProviderInfo {
+    return {
+      isPremium: true,
+      name: 'Financial Modeling Prep',
+      url: 'https://financialmodelingprep.com/developer/docs'
+    };
+  }
+
+  public async getDividends({}: GetDividendsParams) {
     return {};
   }
 
-  public async getHistorical(
-    aSymbol: string,
-    aGranularity: Granularity = 'day',
-    from: Date,
-    to: Date
-  ): Promise<{
+  public async getHistorical({
+    from,
+    requestTimeout = this.configurationService.get('REQUEST_TIMEOUT'),
+    symbol,
+    to
+  }: GetHistoricalParams): Promise<{
     [symbol: string]: { [date: string]: IDataProviderHistoricalResponse };
   }> {
     try {
-      const get = bent(
-        `${this.URL}/historical-price-full/${aSymbol}?apikey=${this.apiKey}`,
-        'GET',
-        'json',
-        200
-      );
-      const { historical } = await get();
+      const abortController = new AbortController();
+
+      setTimeout(() => {
+        abortController.abort();
+      }, requestTimeout);
+
+      const { historical } = await got(
+        `${this.URL}/historical-price-full/${symbol}?apikey=${this.apiKey}`,
+        {
+          // @ts-ignore
+          signal: abortController.signal
+        }
+      ).json<any>();
 
       const result: {
         [symbol: string]: { [date: string]: IDataProviderHistoricalResponse };
       } = {
-        [aSymbol]: {}
+        [symbol]: {}
       };
 
       for (const { close, date } of historical) {
@@ -84,7 +95,7 @@ export class FinancialModelingPrepService implements DataProviderInterface {
             isAfter(parseDate(date), from)) &&
           isBefore(parseDate(date), to)
         ) {
-          result[aSymbol][date] = {
+          result[symbol][date] = {
             marketPrice: close
           };
         }
@@ -93,7 +104,7 @@ export class FinancialModelingPrepService implements DataProviderInterface {
       return result;
     } catch (error) {
       throw new Error(
-        `Could not get historical market data for ${aSymbol} (${this.getName()}) from ${format(
+        `Could not get historical market data for ${symbol} (${this.getName()}) from ${format(
           from,
           DATE_FORMAT
         )} to ${format(to, DATE_FORMAT)}: [${error.name}] ${error.message}`
@@ -105,27 +116,34 @@ export class FinancialModelingPrepService implements DataProviderInterface {
     return DataSource.FINANCIAL_MODELING_PREP;
   }
 
-  public async getQuotes(
-    aSymbols: string[]
-  ): Promise<{ [symbol: string]: IDataProviderResponse }> {
-    const results: { [symbol: string]: IDataProviderResponse } = {};
+  public async getQuotes({
+    requestTimeout = this.configurationService.get('REQUEST_TIMEOUT'),
+    symbols
+  }: GetQuotesParams): Promise<{ [symbol: string]: IDataProviderResponse }> {
+    const response: { [symbol: string]: IDataProviderResponse } = {};
 
-    if (aSymbols.length <= 0) {
-      return {};
+    if (symbols.length <= 0) {
+      return response;
     }
 
     try {
-      const get = bent(
-        `${this.URL}/quote/${aSymbols.join(',')}?apikey=${this.apiKey}`,
-        'GET',
-        'json',
-        200
-      );
-      const response = await get();
+      const abortController = new AbortController();
 
-      for (const { price, symbol } of response) {
-        results[symbol] = {
-          currency: this.baseCurrency,
+      setTimeout(() => {
+        abortController.abort();
+      }, requestTimeout);
+
+      const quotes = await got(
+        `${this.URL}/quote/${symbols.join(',')}?apikey=${this.apiKey}`,
+        {
+          // @ts-ignore
+          signal: abortController.signal
+        }
+      ).json<any>();
+
+      for (const { price, symbol } of quotes) {
+        response[symbol] = {
+          currency: DEFAULT_CURRENCY,
           dataProviderInfo: this.getDataProviderInfo(),
           dataSource: DataSource.FINANCIAL_MODELING_PREP,
           marketPrice: price,
@@ -133,10 +151,18 @@ export class FinancialModelingPrepService implements DataProviderInterface {
         };
       }
     } catch (error) {
-      Logger.error(error, 'FinancialModelingPrepService');
+      let message = error;
+
+      if (error?.code === 'ABORT_ERR') {
+        message = `RequestError: The operation to get the quotes was aborted because the request to the data provider took more than ${this.configurationService.get(
+          'REQUEST_TIMEOUT'
+        )}ms`;
+      }
+
+      Logger.error(message, 'FinancialModelingPrepService');
     }
 
-    return results;
+    return response;
   }
 
   public getTestSymbol() {
@@ -144,22 +170,24 @@ export class FinancialModelingPrepService implements DataProviderInterface {
   }
 
   public async search({
-    includeIndices = false,
     query
-  }: {
-    includeIndices?: boolean;
-    query: string;
-  }): Promise<{ items: LookupItem[] }> {
+  }: GetSearchParams): Promise<{ items: LookupItem[] }> {
     let items: LookupItem[] = [];
 
     try {
-      const get = bent(
+      const abortController = new AbortController();
+
+      setTimeout(() => {
+        abortController.abort();
+      }, this.configurationService.get('REQUEST_TIMEOUT'));
+
+      const result = await got(
         `${this.URL}/search?query=${query}&apikey=${this.apiKey}`,
-        'GET',
-        'json',
-        200
-      );
-      const result = await get();
+        {
+          // @ts-ignore
+          signal: abortController.signal
+        }
+      ).json<any>();
 
       items = result.map(({ currency, name, symbol }) => {
         return {
@@ -172,16 +200,17 @@ export class FinancialModelingPrepService implements DataProviderInterface {
         };
       });
     } catch (error) {
-      Logger.error(error, 'FinancialModelingPrepService');
+      let message = error;
+
+      if (error?.code === 'ABORT_ERR') {
+        message = `RequestError: The operation to search for ${query} was aborted because the request to the data provider took more than ${this.configurationService.get(
+          'REQUEST_TIMEOUT'
+        )}ms`;
+      }
+
+      Logger.error(message, 'FinancialModelingPrepService');
     }
 
     return { items };
-  }
-
-  private getDataProviderInfo(): DataProviderInfo {
-    return {
-      name: 'Financial Modeling Prep',
-      url: 'https://financialmodelingprep.com/developer/docs'
-    };
   }
 }

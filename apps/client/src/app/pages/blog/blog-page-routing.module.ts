@@ -1,6 +1,7 @@
+import { AuthGuard } from '@ghostfolio/client/core/auth.guard';
+
 import { NgModule } from '@angular/core';
 import { RouterModule, Routes } from '@angular/router';
-import { AuthGuard } from '@ghostfolio/client/core/auth.guard';
 
 import { BlogPageComponent } from './blog-page.component';
 
@@ -136,6 +137,51 @@ const routes: Routes = [
         './2023/07/exploring-the-path-to-fire/exploring-the-path-to-fire-page.component'
       ).then((c) => c.ExploringThePathToFirePageComponent),
     title: 'Exploring the Path to FIRE'
+  },
+  {
+    canActivate: [AuthGuard],
+    path: '2023/08/ghostfolio-joins-oss-friends',
+    loadComponent: () =>
+      import(
+        './2023/08/ghostfolio-joins-oss-friends/ghostfolio-joins-oss-friends-page.component'
+      ).then((c) => c.GhostfolioJoinsOssFriendsPageComponent),
+    title: 'Ghostfolio joins OSS Friends'
+  },
+  {
+    canActivate: [AuthGuard],
+    path: '2023/09/ghostfolio-2',
+    loadComponent: () =>
+      import('./2023/09/ghostfolio-2/ghostfolio-2-page.component').then(
+        (c) => c.Ghostfolio2PageComponent
+      ),
+    title: 'Ghostfolio 2.0'
+  },
+  {
+    canActivate: [AuthGuard],
+    path: '2023/09/hacktoberfest-2023',
+    loadComponent: () =>
+      import(
+        './2023/09/hacktoberfest-2023/hacktoberfest-2023-page.component'
+      ).then((c) => c.Hacktoberfest2023PageComponent),
+    title: 'Hacktoberfest 2023'
+  },
+  {
+    canActivate: [AuthGuard],
+    path: '2023/11/hacktoberfest-2023-debriefing',
+    loadComponent: () =>
+      import(
+        './2023/11/hacktoberfest-2023-debriefing/hacktoberfest-2023-debriefing-page.component'
+      ).then((c) => c.Hacktoberfest2023DebriefingPageComponent),
+    title: 'Hacktoberfest 2023 Debriefing'
+  },
+  {
+    canActivate: [AuthGuard],
+    path: '2023/11/black-week-2023',
+    loadComponent: () =>
+      import('./2023/11/black-week-2023/black-week-2023-page.component').then(
+        (c) => c.BlackWeek2023PageComponent
+      ),
+    title: 'Black Week 2023'
   }
 ];
 

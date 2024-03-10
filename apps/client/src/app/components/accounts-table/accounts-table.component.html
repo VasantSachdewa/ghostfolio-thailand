@@ -1,3 +1,15 @@
+<div *ngIf="showActions" class="d-flex justify-content-end">
+  <button
+    class="align-items-center d-flex"
+    mat-stroked-button
+    [disabled]="dataSource?.data.length < 2"
+    (click)="onTransferBalance()"
+  >
+    <ion-icon class="mr-2" name="arrow-redo-outline" />
+    <ng-container i18n>Transfer Cash Balance</ng-container>...
+  </button>
+</div>
+
 <table class="gf-table w-100" mat-table matSort [dataSource]="dataSource">
   <ng-container matColumnDef="status">
     <th
@@ -7,7 +19,7 @@
     ></th>
     <td *matCellDef="let element" class="d-none d-lg-table-cell px-1" mat-cell>
       <div class="d-flex justify-content-center">
-        <ion-icon *ngIf="element.isExcluded" name="eye-off-outline"></ion-icon>
+        <ion-icon *ngIf="element.isExcluded" name="eye-off-outline" />
       </div>
     </td>
     <td
@@ -27,13 +39,8 @@
         class="d-inline d-sm-none mr-1"
         [tooltip]="element.Platform?.name"
         [url]="element.Platform?.url"
-      ></gf-symbol-icon>
-      <span>{{ element.name }} </span>
-      <span
-        *ngIf="element.isDefault"
-        class="d-lg-inline-block d-none text-muted"
-        >(Default)</span
-      >
+      />
+      <span>{{ element.name }}</span>
     </td>
     <td *matFooterCellDef class="px-1" i18n mat-footer-cell>Total</td>
   </ng-container>
@@ -71,7 +78,7 @@
           class="mr-1"
           [tooltip]="element.Platform?.name"
           [url]="element.Platform?.url"
-        ></gf-symbol-icon>
+        />
         <span>{{ element.Platform?.name }}</span>
       </div>
     </td>
@@ -85,7 +92,7 @@
   <ng-container matColumnDef="transactions">
     <th
       *matHeaderCellDef
-      class="px-1 text-right"
+      class="justify-content-end px-1"
       mat-header-cell
       mat-sort-header="transactionCount"
     >
@@ -93,9 +100,7 @@
       <span class="d-none d-sm-block" i18n>Activities</span>
     </th>
     <td *matCellDef="let element" class="px-1 text-right" mat-cell>
-      <ng-container *ngIf="element.accountType === 'SECURITIES'">{{
-        element.transactionCount
-      }}</ng-container>
+      {{ element.transactionCount }}
     </td>
     <td *matFooterCellDef class="px-1 text-right" mat-footer-cell>
       {{ transactionCount }}
@@ -121,7 +126,7 @@
         [isCurrency]="true"
         [locale]="locale"
         [value]="element.balance"
-      ></gf-value>
+      />
     </td>
     <td
       *matFooterCellDef
@@ -133,7 +138,7 @@
         [isCurrency]="true"
         [locale]="locale"
         [value]="totalBalanceInBaseCurrency"
-      ></gf-value>
+      />
     </td>
   </ng-container>
 
@@ -156,7 +161,7 @@
         [isCurrency]="true"
         [locale]="locale"
         [value]="element.value"
-      ></gf-value>
+      />
     </td>
     <td
       *matFooterCellDef
@@ -168,7 +173,7 @@
         [isCurrency]="true"
         [locale]="locale"
         [value]="totalValueInBaseCurrency"
-      ></gf-value>
+      />
     </td>
   </ng-container>
 
@@ -191,7 +196,7 @@
         [isCurrency]="true"
         [locale]="locale"
         [value]="element.valueInBaseCurrency"
-      ></gf-value>
+      />
     </td>
     <td
       *matFooterCellDef
@@ -203,7 +208,7 @@
         [isCurrency]="true"
         [locale]="locale"
         [value]="totalValueInBaseCurrency"
-      ></gf-value>
+      />
     </td>
   </ng-container>
 
@@ -221,7 +226,7 @@
         title="Note"
         (click)="onOpenComment(element.comment); $event.stopPropagation()"
       >
-        <ion-icon name="document-text-outline"></ion-icon>
+        <ion-icon name="document-text-outline" />
       </button>
     </td>
     <td
@@ -231,7 +236,7 @@
     ></td>
   </ng-container>
 
-  <ng-container matColumnDef="actions">
+  <ng-container matColumnDef="actions" stickyEnd>
     <th *matHeaderCellDef class="px-1 text-center" i18n mat-header-cell></th>
     <td *matCellDef="let element" class="px-1 text-center" mat-cell>
       <button
@@ -240,20 +245,24 @@
         [matMenuTriggerFor]="accountMenu"
         (click)="$event.stopPropagation()"
       >
-        <ion-icon name="ellipsis-horizontal"></ion-icon>
+        <ion-icon name="ellipsis-horizontal" />
       </button>
       <mat-menu #accountMenu="matMenu" xPosition="before">
         <button mat-menu-item (click)="onUpdateAccount(element)">
-          <ion-icon class="mr-2" name="create-outline"></ion-icon>
-          <span i18n>Edit</span>
+          <span class="align-items-center d-flex">
+            <ion-icon class="mr-2" name="create-outline" />
+            <span i18n>Edit</span>
+          </span>
         </button>
         <button
           mat-menu-item
-          [disabled]="element.isDefault || element.transactionCount > 0"
+          [disabled]="element.transactionCount > 0"
           (click)="onDeleteAccount(element.id)"
         >
-          <ion-icon class="mr-2" name="trash-outline"></ion-icon>
-          <span i18n>Delete</span>
+          <span class="align-items-center d-flex">
+            <ion-icon class="mr-2" name="trash-outline" />
+            <span i18n>Delete</span>
+          </span>
         </button>
       </mat-menu>
     </td>
@@ -263,14 +272,16 @@
   <tr *matHeaderRowDef="displayedColumns" mat-header-row></tr>
   <tr
     *matRowDef="let row; columns: displayedColumns"
-    class="cursor-pointer"
     mat-row
+    [ngClass]="{
+      'cursor-pointer': hasPermissionToOpenDetails
+    }"
     (click)="onOpenAccountDetailDialog(row.id)"
   ></tr>
   <tr
     *matFooterRowDef="displayedColumns"
     mat-footer-row
-    [ngClass]="{ 'd-none': isLoading }"
+    [ngClass]="{ 'd-none': isLoading || !showFooter }"
   ></tr>
 </table>
 
@@ -282,4 +293,4 @@
     height: '1.5rem',
     width: '100%'
   }"
-></ngx-skeleton-loader>
+/>

@@ -1,6 +1,7 @@
 import { UserService } from '@ghostfolio/api/app/user/user.service';
 import { ConfigurationService } from '@ghostfolio/api/services/configuration/configuration.service';
 import { PropertyService } from '@ghostfolio/api/services/property/property.service';
+
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Provider } from '@prisma/client';
@@ -55,7 +56,7 @@ export class AuthService {
         const isUserSignupEnabled =
           await this.propertyService.isUserSignupEnabled();
 
-        if (!isUserSignupEnabled) {
+        if (!isUserSignupEnabled || true) {
           throw new Error('Sign up forbidden');
         }
 

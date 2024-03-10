@@ -9,6 +9,7 @@ import {
   resolveFearAndGreedIndex,
   resolveMarketCondition
 } from '@ghostfolio/common/helper';
+
 import { Injectable, Logger } from '@nestjs/common';
 import { isWeekend } from 'date-fns';
 import { TwitterApi, TwitterApiReadWrite } from 'twitter-api-v2';
@@ -57,7 +58,7 @@ export class TwitterBotService {
           symbolItem.marketPrice
         }/100)`;
 
-        const benchmarkListing = await this.getBenchmarkListing(3);
+        const benchmarkListing = await this.getBenchmarkListing();
 
         if (benchmarkListing?.length > 1) {
           status += '\n\n';
@@ -65,9 +66,8 @@ export class TwitterBotService {
           status += benchmarkListing;
         }
 
-        const { data: createdTweet } = await this.twitterClient.v2.tweet(
-          status
-        );
+        const { data: createdTweet } =
+          await this.twitterClient.v2.tweet(status);
 
         Logger.log(
           `Fear & Greed Index has been tweeted: https://twitter.com/ghostfolio_/status/${createdTweet.id}`,
@@ -79,29 +79,22 @@ export class TwitterBotService {
     }
   }
 
-  private async getBenchmarkListing(aMax: number) {
+  private async getBenchmarkListing() {
     const benchmarks = await this.benchmarkService.getBenchmarks({
+      enableSharing: true,
       useCache: false
     });
 
-    const benchmarkListing: string[] = [];
-
-    for (const [index, benchmark] of benchmarks.entries()) {
-      if (index > aMax - 1) {
-        break;
-      }
-
-      benchmarkListing.push(
-        `${benchmark.name} ${(
-          benchmark.performances.allTimeHigh.performancePercent * 100
+    return benchmarks
+      .map(({ marketCondition, name, performances }) => {
+        return `${name} ${(
+          performances.allTimeHigh.performancePercent * 100
         ).toFixed(1)}%${
-          benchmark.marketCondition !== 'NEUTRAL_MARKET'
-            ? ' ' + resolveMarketCondition(benchmark.marketCondition).emoji
+          marketCondition !== 'NEUTRAL_MARKET'
+            ? ' ' + resolveMarketCondition(marketCondition).emoji
             : ''
-        }`
-      );
-    }
-
-    return benchmarkListing.join('\n');
+        }`;
+      })
+      .join('\n');
   }
 }

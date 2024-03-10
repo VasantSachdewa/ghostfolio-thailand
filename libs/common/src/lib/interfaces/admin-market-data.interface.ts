@@ -6,12 +6,15 @@ export interface AdminMarketData {
 }
 
 export interface AdminMarketDataItem {
+  activitiesCount?: number;
   assetClass?: AssetClass;
   assetSubClass?: AssetSubClass;
   countriesCount: number;
+  currency: string;
   dataSource: DataSource;
   date?: Date;
   marketDataItemCount: number;
+  name: string;
   sectorsCount: number;
   symbol: string;
 }

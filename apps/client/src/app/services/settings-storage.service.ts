@@ -1,7 +1,8 @@
 import { Injectable } from '@angular/core';
 
-export const RANGE = 'range';
-export const STAY_SIGNED_IN = 'staySignedIn';
+export const KEY_RANGE = 'range';
+export const KEY_STAY_SIGNED_IN = 'staySignedIn';
+export const KEY_TOKEN = 'auth-token';
 
 @Injectable({
   providedIn: 'root'
@@ -17,7 +18,7 @@ export class SettingsStorageService {
     window.localStorage.setItem(aKey, aValue);
   }
 
-  public removeSetting(aKey: string): void {
+  public removeSetting(aKey: string) {
     return window.localStorage.removeItem(aKey);
   }
 }

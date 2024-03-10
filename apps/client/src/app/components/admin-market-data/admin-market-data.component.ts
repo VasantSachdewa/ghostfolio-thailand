@@ -1,3 +1,11 @@
+import { AdminService } from '@ghostfolio/client/services/admin.service';
+import { UserService } from '@ghostfolio/client/services/user/user.service';
+import { DEFAULT_PAGE_SIZE } from '@ghostfolio/common/config';
+import { getDateFormatString } from '@ghostfolio/common/helper';
+import { Filter, UniqueAsset, User } from '@ghostfolio/common/interfaces';
+import { AdminMarketDataItem } from '@ghostfolio/common/interfaces/admin-market-data.interface';
+import { translate } from '@ghostfolio/ui/i18n';
+
 import {
   AfterViewInit,
   ChangeDetectionStrategy,
@@ -9,17 +17,11 @@ import {
 } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatPaginator, PageEvent } from '@angular/material/paginator';
-import { MatSort, Sort } from '@angular/material/sort';
+import { MatSort, Sort, SortDirection } from '@angular/material/sort';
 import { MatTableDataSource } from '@angular/material/table';
 import { ActivatedRoute, Router } from '@angular/router';
-import { AdminService } from '@ghostfolio/client/services/admin.service';
-import { UserService } from '@ghostfolio/client/services/user/user.service';
-import { DEFAULT_PAGE_SIZE } from '@ghostfolio/common/config';
-import { getDateFormatString } from '@ghostfolio/common/helper';
-import { Filter, UniqueAsset, User } from '@ghostfolio/common/interfaces';
-import { AdminMarketDataItem } from '@ghostfolio/common/interfaces/admin-market-data.interface';
-import { translate } from '@ghostfolio/ui/i18n';
-import { AssetSubClass, DataSource, Prisma } from '@prisma/client';
+import { AssetSubClass, DataSource } from '@prisma/client';
+import { isUUID } from 'class-validator';
 import { DeviceDetectorService } from 'ngx-device-detector';
 import { Subject } from 'rxjs';
 import { distinctUntilChanged, switchMap, takeUntil } from 'rxjs/operators';
@@ -51,13 +53,31 @@ export class AdminMarketDataComponent
     AssetSubClass.PRECIOUS_METAL,
     AssetSubClass.PRIVATE_EQUITY,
     AssetSubClass.STOCK
-  ].map((assetSubClass) => {
-    return {
-      id: assetSubClass,
-      label: translate(assetSubClass),
-      type: 'ASSET_SUB_CLASS'
-    };
-  });
+  ]
+    .map((assetSubClass) => {
+      return {
+        id: assetSubClass.toString(),
+        label: translate(assetSubClass),
+        type: <Filter['type']>'ASSET_SUB_CLASS'
+      };
+    })
+    .concat([
+      {
+        id: 'CURRENCIES',
+        label: $localize`Currencies`,
+        type: <Filter['type']>'PRESET_ID'
+      },
+      {
+        id: 'ETF_WITHOUT_COUNTRIES',
+        label: $localize`ETFs without Countries`,
+        type: <Filter['type']>'PRESET_ID'
+      },
+      {
+        id: 'ETF_WITHOUT_SECTORS',
+        label: $localize`ETFs without Sectors`,
+        type: <Filter['type']>'PRESET_ID'
+      }
+    ]);
   public currentDataSource: DataSource;
   public currentSymbol: string;
   public dataSource: MatTableDataSource<AdminMarketDataItem> =
@@ -65,7 +85,7 @@ export class AdminMarketDataComponent
   public defaultDateFormat: string;
   public deviceType: string;
   public displayedColumns = [
-    'symbol',
+    'nameWithSymbol',
     'dataSource',
     'assetClass',
     'assetSubClass',
@@ -79,6 +99,7 @@ export class AdminMarketDataComponent
   ];
   public filters$ = new Subject<Filter[]>();
   public isLoading = false;
+  public isUUID = isUUID;
   public placeholder = '';
   public pageSize = DEFAULT_PAGE_SIZE;
   public totalItems = 0;
@@ -140,7 +161,7 @@ export class AdminMarketDataComponent
 
         this.loadData({
           sortColumn,
-          sortDirection: <Prisma.SortOrder>direction,
+          sortDirection: direction,
           pageIndex: this.paginator.pageIndex
         });
       }
@@ -155,15 +176,25 @@ export class AdminMarketDataComponent
     this.loadData({
       pageIndex: page.pageIndex,
       sortColumn: this.sort.active,
-      sortDirection: <Prisma.SortOrder>this.sort.direction
+      sortDirection: this.sort.direction
     });
   }
 
   public onDeleteProfileData({ dataSource, symbol }: UniqueAsset) {
-    this.adminService
-      .deleteProfileData({ dataSource, symbol })
-      .pipe(takeUntil(this.unsubscribeSubject))
-      .subscribe(() => {});
+    const confirmation = confirm(
+      $localize`Do you really want to delete this asset profile?`
+    );
+
+    if (confirmation) {
+      this.adminService
+        .deleteProfileData({ dataSource, symbol })
+        .pipe(takeUntil(this.unsubscribeSubject))
+        .subscribe(() => {
+          setTimeout(() => {
+            window.location.reload();
+          }, 300);
+        });
+    }
   }
 
   public onGather7Days() {
@@ -232,10 +263,16 @@ export class AdminMarketDataComponent
     }: {
       pageIndex: number;
       sortColumn?: string;
-      sortDirection?: Prisma.SortOrder;
+      sortDirection?: SortDirection;
     } = { pageIndex: 0 }
   ) {
     this.isLoading = true;
+
+    this.pageSize =
+      this.activeFilters.length === 1 &&
+      this.activeFilters[0].type === 'PRESET_ID'
+        ? undefined
+        : DEFAULT_PAGE_SIZE;
 
     if (pageIndex === 0 && this.paginator) {
       this.paginator.pageIndex = 0;
@@ -318,7 +355,7 @@ export class AdminMarketDataComponent
         dialogRef
           .afterClosed()
           .pipe(takeUntil(this.unsubscribeSubject))
-          .subscribe(({ dataSource, symbol }) => {
+          .subscribe(({ dataSource, symbol } = {}) => {
             if (dataSource && symbol) {
               this.adminService
                 .addAssetProfile({ dataSource, symbol })

@@ -5,7 +5,7 @@
 
 :root {
   --dark-background: rgb(25, 25, 25);
-  --font-family-sans-serif: Roboto, 'Helvetica Neue', sans-serif;
+  --font-family-sans-serif: 'Inter', Roboto, 'Helvetica Neue', sans-serif;
   --light-background: rgb(255, 255, 255);
 
   --dark-primary-text: 0, 0, 0, 0.87;
@@ -214,6 +214,16 @@ body {
     }
   }
 
+  .mat-mdc-menu-panel {
+    &.assistant {
+      max-width: unset !important;
+
+      .mat-mdc-menu-content {
+        padding: 0;
+      }
+    }
+  }
+
   &.is-dark-theme {
     background: var(--dark-background);
     color: rgba(var(--light-primary-text));
@@ -253,6 +263,7 @@ body {
 
     .mat-mdc-card {
       --mdc-elevated-card-container-color: var(--dark-background);
+      --mdc-outlined-card-container-color: var(--dark-background);
     }
 
     .mat-mdc-fab {
@@ -262,7 +273,6 @@ body {
       }
     }
 
-    .mat-mdc-paginator,
     .mat-mdc-paginator {
       background-color: rgba(var(--palette-foreground-base-dark), 0.02);
     }
@@ -271,6 +281,22 @@ body {
       &.mat-accent,
       &.mat-primary {
         --mdc-filled-button-label-text-color: rgba(var(--dark-primary-text));
+      }
+    }
+
+    .page {
+      &.has-tabs {
+        .mat-mdc-tab-nav-bar {
+          --mat-tab-header-inactive-label-text-color: rgba(
+            var(--light-primary-text)
+          );
+        }
+
+        @media (min-width: 576px) {
+          .mat-mdc-tab-header {
+            background-color: rgba(var(--palette-foreground-base-dark), 0.02);
+          }
+        }
       }
     }
 
@@ -353,8 +379,18 @@ ngx-skeleton-loader {
   cursor: pointer;
 }
 
+.gf-spacer {
+  flex: 1 1 auto;
+}
+
 .gf-table {
   @include gf-table;
+}
+
+.has-info-message {
+  .page.has-tabs {
+    height: calc(100svh - 2 * var(--mat-toolbar-standard-height));
+  }
 }
 
 .hidden {
@@ -414,6 +450,12 @@ ngx-skeleton-loader {
 
 .mat-mdc-menu-panel {
   .mat-mdc-menu-item {
+    &.font-weight-bold {
+      .mat-mdc-menu-item-text {
+        --mat-menu-item-label-text-weight: 700;
+      }
+    }
+
     .mdc-list-item__primary-text {
       align-items: center;
       display: flex;
@@ -421,7 +463,6 @@ ngx-skeleton-loader {
   }
 }
 
-.mat-mdc-paginator,
 .mat-mdc-paginator {
   background-color: rgba(var(--palette-foreground-base-light), 0.02);
 
@@ -429,6 +470,20 @@ ngx-skeleton-loader {
   .mat-mdc-paginator-page-size {
     display: none;
   }
+}
+
+/**
+ * Fix for https://github.com/angular/components/issues/26818
+ */
+.mat-mdc-slide-toggle {
+  .mdc-switch__track {
+    background-color: rgba(var(--palette-primary-500), 1);
+  }
+}
+
+.mat-stepper-vertical,
+.mat-stepper-horizontal {
+  background: transparent !important;
 }
 
 .mdc-button {
@@ -451,7 +506,73 @@ ngx-skeleton-loader {
 }
 
 .page {
-  padding-bottom: 5rem;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: constant(safe-area-inset-bottom);
+
+  .fab-container {
+    bottom: 2rem;
+    position: fixed;
+    right: 2rem;
+    z-index: 999;
+  }
+
+  &:not(.has-tabs) {
+    @media (min-width: 576px) {
+      padding: 2rem 0;
+    }
+  }
+
+  &.has-tabs {
+    height: calc(100svh - var(--mat-toolbar-standard-height));
+
+    .fab-container {
+      @media (max-width: 575.98px) {
+        bottom: 5rem;
+      }
+    }
+
+    .mat-mdc-tab-nav-bar {
+      --mat-tab-header-active-focus-indicator-color: transparent;
+      --mat-tab-header-active-hover-indicator-color: transparent;
+      --mat-tab-header-inactive-label-text-color: rgba(
+        var(--dark-primary-text)
+      );
+      --mdc-tab-indicator-active-indicator-color: transparent;
+    }
+
+    @media (max-width: 575.98px) {
+      .mat-mdc-tab-link {
+        --mdc-secondary-navigation-tab-container-height: 3rem;
+      }
+    }
+
+    @media (min-width: 576px) {
+      flex-direction: row-reverse;
+
+      .mat-mdc-tab-header {
+        background-color: rgba(var(--palette-foreground-base), 0.02);
+        padding: 2rem 0;
+        width: 14rem;
+        --mat-tab-header-label-text-tracking: normal;
+        --mdc-secondary-navigation-tab-container-height: 2rem;
+
+        .mat-mdc-tab-links {
+          flex-direction: column;
+
+          .mat-mdc-tab-link {
+            justify-content: flex-start;
+          }
+        }
+      }
+
+      .mat-mdc-tab-nav-panel {
+        padding: 2rem 0;
+      }
+    }
+  }
 }
 
 .svgMap-tooltip {
@@ -466,8 +587,8 @@ ngx-skeleton-loader {
   text-decoration: underline !important;
 }
 
-.with-info-message {
-  height: calc(100vh - 5rem - 3.5rem + 0.5rem) !important;
+.text-line-through {
+  text-decoration: line-through;
 }
 
 .with-placeholder-as-option {

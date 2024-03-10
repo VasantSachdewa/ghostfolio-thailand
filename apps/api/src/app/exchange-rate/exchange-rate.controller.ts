@@ -1,4 +1,6 @@
+import { HasPermissionGuard } from '@ghostfolio/api/guards/has-permission.guard';
 import { IDataProviderHistoricalResponse } from '@ghostfolio/api/services/interfaces/interfaces';
+
 import {
   Controller,
   Get,
@@ -7,6 +9,7 @@ import {
   UseGuards
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { parseISO } from 'date-fns';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 
 import { ExchangeRateService } from './exchange-rate.service';
@@ -18,12 +21,12 @@ export class ExchangeRateController {
   ) {}
 
   @Get(':symbol/:dateString')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
   public async getExchangeRate(
     @Param('dateString') dateString: string,
     @Param('symbol') symbol: string
   ): Promise<IDataProviderHistoricalResponse> {
-    const date = new Date(dateString);
+    const date = parseISO(dateString);
 
     const exchangeRate = await this.exchangeRateService.getExchangeRate({
       date,

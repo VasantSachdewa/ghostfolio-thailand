@@ -1,9 +1,10 @@
-import { AssetClass, DataSource } from '@prisma/client';
+import { MarketState } from '@ghostfolio/common/types';
 
-import { MarketState } from '../types';
+import { AssetClass, AssetSubClass, DataSource } from '@prisma/client';
 
 export interface Position {
   assetClass: AssetClass;
+  assetSubClass: AssetSubClass;
   averagePrice: number;
   currency: string;
   dataSource: DataSource;
@@ -17,6 +18,8 @@ export interface Position {
   name?: string;
   netPerformance?: number;
   netPerformancePercentage?: number;
+  netPerformancePercentageWithCurrencyEffect?: number;
+  netPerformanceWithCurrencyEffect?: number;
   quantity: number;
   symbol: string;
   transactionCount: number;

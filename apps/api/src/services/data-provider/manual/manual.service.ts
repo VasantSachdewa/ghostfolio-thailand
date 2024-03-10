@@ -1,5 +1,12 @@
 import { LookupItem } from '@ghostfolio/api/app/symbol/interfaces/lookup-item.interface';
-import { DataProviderInterface } from '@ghostfolio/api/services/data-provider/interfaces/data-provider.interface';
+import { ConfigurationService } from '@ghostfolio/api/services/configuration/configuration.service';
+import {
+  DataProviderInterface,
+  GetDividendsParams,
+  GetHistoricalParams,
+  GetQuotesParams,
+  GetSearchParams
+} from '@ghostfolio/api/services/data-provider/interfaces/data-provider.interface';
 import {
   IDataProviderHistoricalResponse,
   IDataProviderResponse
@@ -11,17 +18,23 @@ import {
   extractNumberFromString,
   getYesterday
 } from '@ghostfolio/common/helper';
-import { Granularity } from '@ghostfolio/common/types';
+import {
+  DataProviderInfo,
+  ScraperConfiguration
+} from '@ghostfolio/common/interfaces';
+
 import { Injectable, Logger } from '@nestjs/common';
 import { DataSource, SymbolProfile } from '@prisma/client';
-import bent from 'bent';
 import * as cheerio from 'cheerio';
 import { isUUID } from 'class-validator';
 import { addDays, format, isBefore } from 'date-fns';
+import got, { Headers } from 'got';
+import jsonpath from 'jsonpath';
 
 @Injectable()
 export class ManualService implements DataProviderInterface {
   public constructor(
+    private readonly configurationService: ConfigurationService,
     private readonly prismaService: PrismaService,
     private readonly symbolProfileService: SymbolProfileService
   ) {}
@@ -30,40 +43,46 @@ export class ManualService implements DataProviderInterface {
     return true;
   }
 
-  public async getAssetProfile(
-    aSymbol: string
-  ): Promise<Partial<SymbolProfile>> {
+  public async getAssetProfile({
+    symbol
+  }: {
+    symbol: string;
+  }): Promise<Partial<SymbolProfile>> {
+    const assetProfile: Partial<SymbolProfile> = {
+      symbol,
+      dataSource: this.getName()
+    };
+
+    const [symbolProfile] = await this.symbolProfileService.getSymbolProfiles([
+      { symbol, dataSource: this.getName() }
+    ]);
+
+    if (symbolProfile) {
+      assetProfile.currency = symbolProfile.currency;
+      assetProfile.name = symbolProfile.name;
+    }
+
+    return assetProfile;
+  }
+
+  public getDataProviderInfo(): DataProviderInfo {
     return {
-      dataSource: this.getName(),
-      symbol: aSymbol
+      isPremium: false
     };
   }
 
-  public async getDividends({
-    from,
-    granularity = 'day',
-    symbol,
-    to
-  }: {
-    from: Date;
-    granularity: Granularity;
-    symbol: string;
-    to: Date;
-  }) {
+  public async getDividends({}: GetDividendsParams) {
     return {};
   }
 
-  public async getHistorical(
-    aSymbol: string,
-    aGranularity: Granularity = 'day',
-    from: Date,
-    to: Date
-  ): Promise<{
+  public async getHistorical({
+    from,
+    symbol,
+    to
+  }: GetHistoricalParams): Promise<{
     [symbol: string]: { [date: string]: IDataProviderHistoricalResponse };
   }> {
     try {
-      const symbol = aSymbol;
-
       const [symbolProfile] = await this.symbolProfileService.getSymbolProfiles(
         [{ symbol, dataSource: this.getName() }]
       );
@@ -95,12 +114,7 @@ export class ManualService implements DataProviderInterface {
         return {};
       }
 
-      const get = bent(url, 'GET', 'string', 200, headers);
-
-      const html = await get();
-      const $ = cheerio.load(html);
-
-      const value = extractNumberFromString($(selector).text());
+      const value = await this.scrape(symbolProfile.scraperConfiguration);
 
       return {
         [symbol]: {
@@ -111,7 +125,7 @@ export class ManualService implements DataProviderInterface {
       };
     } catch (error) {
       throw new Error(
-        `Could not get historical market data for ${aSymbol} (${this.getName()}) from ${format(
+        `Could not get historical market data for ${symbol} (${this.getName()}) from ${format(
           from,
           DATE_FORMAT
         )} to ${format(to, DATE_FORMAT)}: [${error.name}] ${error.message}`
@@ -123,18 +137,18 @@ export class ManualService implements DataProviderInterface {
     return DataSource.MANUAL;
   }
 
-  public async getQuotes(
-    aSymbols: string[]
-  ): Promise<{ [symbol: string]: IDataProviderResponse }> {
+  public async getQuotes({
+    symbols
+  }: GetQuotesParams): Promise<{ [symbol: string]: IDataProviderResponse }> {
     const response: { [symbol: string]: IDataProviderResponse } = {};
 
-    if (aSymbols.length <= 0) {
+    if (symbols.length <= 0) {
       return response;
     }
 
     try {
       const symbolProfiles = await this.symbolProfileService.getSymbolProfiles(
-        aSymbols.map((symbol) => {
+        symbols.map((symbol) => {
           return { symbol, dataSource: this.getName() };
         })
       );
@@ -144,21 +158,23 @@ export class ManualService implements DataProviderInterface {
         orderBy: {
           date: 'desc'
         },
-        take: aSymbols.length,
+        take: symbols.length,
         where: {
           symbol: {
-            in: aSymbols
+            in: symbols
           }
         }
       });
 
-      for (const symbolProfile of symbolProfiles) {
-        response[symbolProfile.symbol] = {
-          currency: symbolProfile.currency,
+      for (const { currency, symbol } of symbolProfiles) {
+        let marketPrice = marketData.find((marketDataItem) => {
+          return marketDataItem.symbol === symbol;
+        })?.marketPrice;
+
+        response[symbol] = {
+          currency,
+          marketPrice,
           dataSource: this.getName(),
-          marketPrice: marketData.find((marketDataItem) => {
-            return marketDataItem.symbol === symbolProfile.symbol;
-          })?.marketPrice,
           marketState: 'delayed'
         };
       }
@@ -176,12 +192,8 @@ export class ManualService implements DataProviderInterface {
   }
 
   public async search({
-    includeIndices = false,
     query
-  }: {
-    includeIndices?: boolean;
-    query: string;
-  }): Promise<{ items: LookupItem[] }> {
+  }: GetSearchParams): Promise<{ items: LookupItem[] }> {
     let items = await this.prismaService.symbolProfile.findMany({
       select: {
         assetClass: true,
@@ -216,6 +228,57 @@ export class ManualService implements DataProviderInterface {
       return !isUUID(symbol);
     });
 
-    return { items };
+    return {
+      items: items.map((item) => {
+        return { ...item, dataProviderInfo: this.getDataProviderInfo() };
+      })
+    };
+  }
+
+  public async test(scraperConfiguration: ScraperConfiguration) {
+    return this.scrape(scraperConfiguration);
+  }
+
+  private async scrape(
+    scraperConfiguration: ScraperConfiguration
+  ): Promise<number> {
+    try {
+      const abortController = new AbortController();
+
+      setTimeout(() => {
+        abortController.abort();
+      }, this.configurationService.get('REQUEST_TIMEOUT'));
+
+      let locale = scraperConfiguration.locale;
+      const { body, headers } = await got(scraperConfiguration.url, {
+        headers: scraperConfiguration.headers as Headers,
+        // @ts-ignore
+        signal: abortController.signal
+      });
+
+      if (headers['content-type'] === 'application/json') {
+        const data = JSON.parse(body);
+        const value = String(
+          jsonpath.query(data, scraperConfiguration.selector)[0]
+        );
+
+        return extractNumberFromString({ locale, value });
+      } else {
+        const $ = cheerio.load(body);
+
+        if (!locale) {
+          try {
+            locale = $('html').attr('lang');
+          } catch {}
+        }
+
+        return extractNumberFromString({
+          locale,
+          value: $(scraperConfiguration.selector).first().text()
+        });
+      }
+    } catch (error) {
+      throw error;
+    }
   }
 }

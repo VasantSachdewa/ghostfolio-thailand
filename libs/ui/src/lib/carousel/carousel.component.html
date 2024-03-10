@@ -1,0 +1,36 @@
+@if (this.showPrevArrow) {
+  <button
+    aria-hidden="true"
+    aria-label="previous"
+    class="carousel-nav carousel-nav-prev no-min-width position-absolute px-1"
+    mat-button
+    tabindex="-1"
+    (click)="previous()"
+  >
+    <ion-icon name="chevron-back-outline" />
+  </button>
+}
+
+<div
+  #contentWrapper
+  class="overflow-hidden"
+  role="region"
+  (keyup)="onKeydown($event)"
+>
+  <div #list class="d-flex carousel-content" role="list" tabindex="0">
+    <ng-content></ng-content>
+  </div>
+</div>
+
+@if (this.showNextArrow) {
+  <button
+    aria-hidden="true"
+    aria-label="next"
+    class="carousel-nav carousel-nav-next no-min-width position-absolute px-1"
+    mat-button
+    tabindex="-1"
+    (click)="next()"
+  >
+    <ion-icon name="chevron-forward-outline" />
+  </button>
+}

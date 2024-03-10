@@ -7,12 +7,22 @@
   .mat-toolbar {
     background-color: var(--light-background);
 
-    .spacer {
-      flex: 1 1 auto;
+    .logo-container {
+      &.filled {
+        background-color: rgba(var(--palette-foreground-base), 0.02);
+      }
+
+      @media (min-width: 576px) {
+        width: 14rem;
+      }
+    }
+
+    .list-inline-item {
+      margin: 0;
     }
 
     .mdc-button {
-      height: unset;
+      height: 100%;
 
       &:not(.mat-primary) {
         background-color: transparent;
@@ -22,6 +32,10 @@
 
       ion-icon {
         font-size: 1.5rem;
+
+        &.rotate-90 {
+          transform: rotate(90deg);
+        }
       }
     }
   }
@@ -30,5 +44,11 @@
 :host-context(.is-dark-theme) {
   .mat-toolbar {
     background-color: var(--dark-background);
+
+    .logo-container {
+      &.filled {
+        background-color: rgba(var(--palette-foreground-base-dark), 0.02);
+      }
+    }
   }
 }

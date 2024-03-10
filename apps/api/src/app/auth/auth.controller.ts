@@ -1,7 +1,9 @@
 import { WebAuthService } from '@ghostfolio/api/app/auth/web-auth.service';
+import { HasPermissionGuard } from '@ghostfolio/api/guards/has-permission.guard';
 import { ConfigurationService } from '@ghostfolio/api/services/configuration/configuration.service';
 import { DEFAULT_LANGUAGE_CODE } from '@ghostfolio/common/config';
 import { OAuthResponse } from '@ghostfolio/common/interfaces';
+
 import {
   Body,
   Controller,
@@ -41,9 +43,8 @@ export class AuthController {
     @Param('accessToken') accessToken: string
   ): Promise<OAuthResponse> {
     try {
-      const authToken = await this.authService.validateAnonymousLogin(
-        accessToken
-      );
+      const authToken =
+        await this.authService.validateAnonymousLogin(accessToken);
       return { authToken };
     } catch {
       throw new HttpException(
@@ -119,13 +120,13 @@ export class AuthController {
   }
 
   @Get('webauthn/generate-registration-options')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
   public async generateRegistrationOptions() {
     return this.webAuthService.generateRegistrationOptions();
   }
 
   @Post('webauthn/verify-attestation')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
   public async verifyAttestation(
     @Body() body: { deviceName: string; credential: AttestationCredentialJSON }
   ) {

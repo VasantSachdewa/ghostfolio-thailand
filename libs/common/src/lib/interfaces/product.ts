@@ -1,9 +1,10 @@
 export interface Product {
+  alias?: string;
   component: any;
   founded?: number;
   hasFreePlan?: boolean;
   hasSelfHostingAbility?: boolean;
-  isOpenSource: boolean;
+  isOpenSource?: boolean;
   key: string;
   languages?: string[];
   name: string;

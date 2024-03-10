@@ -2,6 +2,7 @@ import '@angular/localize/init';
 
 const locales = {
   ACCOUNT: $localize`Account`,
+  'Asia-Pacific': $localize`Asia-Pacific`,
   ASSET_CLASS: $localize`Asset Class`,
   ASSET_SUB_CLASS: $localize`Asset Sub Class`,
   CORE: $localize`Core`,
@@ -12,26 +13,36 @@ const locales = {
   GRANT: $localize`Grant`,
   HIGHER_RISK: $localize`Higher Risk`,
   IMPORT_ACTIVITY_ERROR_IS_DUPLICATE: $localize`This activity already exists.`,
+  Japan: $localize`Japan`,
   LOWER_RISK: $localize`Lower Risk`,
   MONTH: $localize`Month`,
   MONTHS: $localize`Months`,
   OTHER: $localize`Other`,
+  PRESET_ID: $localize`Preset`,
   RETIREMENT_PROVISION: $localize`Retirement Provision`,
   SATELLITE: $localize`Satellite`,
-  SECURITIES: $localize`Securities`,
   SYMBOL: $localize`Symbol`,
   TAG: $localize`Tag`,
   YEAR: $localize`Year`,
   YEARS: $localize`Years`,
 
-  // enum AssetClass
+  // Activity types
+  BUY: $localize`Buy`,
+  DIVIDEND: $localize`Dividend`,
+  FEE: $localize`Fee`,
+  INTEREST: $localize`Interest`,
+  ITEM: $localize`Valuable`,
+  LIABILITY: $localize`Liability`,
+  SELL: $localize`Sell`,
+
+  // AssetClass (enum)
   CASH: $localize`Cash`,
   COMMODITY: $localize`Commodity`,
   EQUITY: $localize`Equity`,
   FIXED_INCOME: $localize`Fixed Income`,
   REAL_ESTATE: $localize`Real Estate`,
 
-  // enum AssetSubClass
+  // AssetSubClass (enum)
   BOND: $localize`Bond`,
   CRYPTOCURRENCY: $localize`Cryptocurrency`,
   ETF: $localize`ETF`,
@@ -40,13 +51,24 @@ const locales = {
   PRIVATE_EQUITY: $localize`Private Equity`,
   STOCK: $localize`Stock`,
 
+  // Benchmark
+  ALL_TIME_HIGH: 'All time high',
+  BEAR_MARKET: 'Bear market',
+
   // Continents
   Africa: $localize`Africa`,
   Asia: $localize`Asia`,
   Europe: $localize`Europe`,
   'North America': $localize`North America`,
   Oceania: $localize`Oceania`,
-  'South America': $localize`South America`
+  'South America': $localize`South America`,
+
+  // Fear and Greed Index
+  EXTREME_FEAR: $localize`Extreme Fear`,
+  EXTREME_GREED: $localize`Extreme Greed`,
+  FEAR: $localize`Fear`,
+  GREED: $localize`Greed`,
+  NEUTRAL: $localize`Neutral`
 };
 
 export function translate(aKey: string): string {

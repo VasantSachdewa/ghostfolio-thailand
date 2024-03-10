@@ -4,23 +4,27 @@
       <article>
         <div class="mb-4 text-center">
           <h1 class="mb-1">
-            <strong>Ghostfolio</strong>: The Open Source Alternative to
-            <strong>{{ product2.name }}</strong>
+            <strong>Ghostfolio</strong>:
+            <ng-container i18n>The Open Source Alternative to</ng-container
+            >&nbsp;<strong>{{ product2.name }}</strong>
           </h1>
         </div>
         <section class="mb-4">
-          <p>
-            Are you looking for an open source alternative to {{ product2.name
-            }}? <a [routerLink]="['/about']">Ghostfolio</a> is a powerful
+          <p i18n>
+            Are you looking for an open source alternative to
+            {{ product2.name }}?
+            <a [routerLink]="routerLinkAbout">Ghostfolio</a> is a powerful
             portfolio management tool that provides individuals with a
             comprehensive platform to track, analyze, and optimize their
             investments. Whether you are an experienced investor or just
             starting out, Ghostfolio offers an intuitive user interface and a
-            <a [routerLink]="['/features']">wide range of functionalities</a>
+            <a [routerLink]="routerLinkFeatures"
+              >wide range of functionalities</a
+            >
             to help you make informed decisions and take control of your
             financial future.
           </p>
-          <p>
+          <p i18n>
             Ghostfolio is an open source software (OSS), providing a
             cost-effective alternative to {{ product2.name }} making it
             particularly suitable for individuals on a tight budget, such as
@@ -31,16 +35,24 @@
             and personal finance enthusiasts, Ghostfolio continuously enhances
             its capabilities, security, and user experience.
           </p>
-          <p>
-            Let’s dive deeper into the detailed comparison table below to gain a
-            thorough understanding of how Ghostfolio positions itself relative
-            to {{ product2.name }}. We will explore various aspects such as
+          <p i18n>
+            Let’s dive deeper into the detailed Ghostfolio vs
+            {{ product2.name }} comparison table below to gain a thorough
+            understanding of how Ghostfolio positions itself relative to
+            {{ product2.name }}. We will explore various aspects such as
             features, data privacy, pricing, and more, allowing you to make a
             well-informed choice for your personal requirements.
           </p>
         </section>
         <section class="mb-4">
           <table class="gf-table w-100">
+            <caption class="text-center" i18n>
+              Ghostfolio vs
+              {{
+                product2.name
+              }}
+              comparison table
+            </caption>
             <thead>
               <tr class="mat-mdc-header-row">
                 <th class="mat-mdc-header-cell px-1 py-2"></th>
@@ -93,16 +105,16 @@
                   Open Source Software
                 </td>
                 <td class="mat-mdc-cell px-1 py-2">
-                  <ng-container *ngIf="product1.isOpenSource === true" i18n
+                  <ng-container *ngIf="product1.isOpenSource" i18n
                     >✅ Yes</ng-container
-                  ><ng-container *ngIf="product1.isOpenSource === false" i18n
+                  ><ng-container *ngIf="!product1.isOpenSource" i18n
                     >❌ No</ng-container
                   >
                 </td>
                 <td class="mat-mdc-cell px-1 py-2">
-                  <ng-container *ngIf="product2.isOpenSource === true" i18n
+                  <ng-container *ngIf="product2.isOpenSource" i18n
                     >✅ Yes</ng-container
-                  ><ng-container *ngIf="product2.isOpenSource === false" i18n
+                  ><ng-container *ngIf="!product2.isOpenSource" i18n
                     >❌ No
                   </ng-container>
                 </td>
@@ -175,12 +187,14 @@
               <tr class="mat-mdc-row">
                 <td class="mat-mdc-cell px-3 py-2 text-right" i18n>Pricing</td>
                 <td class="mat-mdc-cell px-1 py-2">
-                  Starting from {{ product1.pricingPerYear }} / year
+                  <span i18n>Starting from</span> ${{ price }} /
+                  <span i18n>year</span>
                 </td>
                 <td class="mat-mdc-cell px-1 py-2">
                   <ng-container *ngIf="product2.pricingPerYear"
-                    >Starting from {{ product2.pricingPerYear }} /
-                    year</ng-container
+                    ><span i18n>Starting from</span>
+                    {{ product2.pricingPerYear }} /
+                    <span i18n>year</span></ng-container
                   >
                 </td>
               </tr>
@@ -193,10 +207,11 @@
           </table>
         </section>
         <section class="mb-4">
-          <p>
-            Please note that the information provided is based on our
-            independent research and analysis. This website is not affiliated
-            with {{ product2.name }} or any other product mentioned in the
+          <p i18n>
+            Please note that the information provided in the Ghostfolio vs
+            {{ product2.name }} comparison table is based on our independent
+            research and analysis. This website is not affiliated with
+            {{ product2.name }} or any other product mentioned in the
             comparison. As the landscape of personal finance tools evolves, it
             is essential to verify any specific details or changes directly from
             the respective product page. Data needs a refresh? Help us maintain
@@ -205,7 +220,7 @@
           </p>
         </section>
         <section class="call-to-action mb-4 py-3 rounded">
-          <h2 class="h4 mb-0 text-center">
+          <h2 class="h4 mb-0 text-center" i18n>
             Ready to take your <strong>investments</strong> to the
             <strong>next level</strong>?
           </h2>
@@ -214,7 +229,7 @@
             Ghostfolio.
           </p>
           <div class="text-center">
-            <a color="primary" href="https://ghostfol.io" mat-flat-button>
+            <a color="primary" href="https://ghostfol.io" i18n mat-flat-button>
               Get Started
             </a>
           </div>
@@ -222,22 +237,25 @@
         <section class="mb-4">
           <ul class="list-inline">
             <li class="list-inline-item">
-              <span class="badge badge-light">{{ product1.name }}</span>
-            </li>
-            <li class="list-inline-item">
-              <span class="badge badge-light">{{ product2.name }}</span>
-            </li>
-            <li class="list-inline-item">
               <span class="badge badge-light">Alternative</span>
             </li>
             <li class="list-inline-item">
               <span class="badge badge-light">App</span>
             </li>
             <li class="list-inline-item">
+              <span class="badge badge-light">Budgeting</span>
+            </li>
+            <li class="list-inline-item">
               <span class="badge badge-light">Community</span>
             </li>
             <li class="list-inline-item">
+              <span class="badge badge-light">Family Office</span>
+            </li>
+            <li class="list-inline-item">
               <span class="badge badge-light">Fintech</span>
+            </li>
+            <li class="list-inline-item">
+              <span class="badge badge-light">{{ product1.name }}</span>
             </li>
             <li class="list-inline-item">
               <span class="badge badge-light">Investment</span>
@@ -273,14 +291,20 @@
               <span class="badge badge-light">Wealth</span>
             </li>
             <li class="list-inline-item">
+              <span class="badge badge-light">WealthTech</span>
+            </li>
+            <li class="list-inline-item">
               <span class="badge badge-light">Wealth Management</span>
+            </li>
+            <li class="list-inline-item">
+              <span class="badge badge-light">{{ product2.name }}</span>
             </li>
           </ul>
         </section>
         <nav aria-label="breadcrumb">
           <ol class="breadcrumb">
             <li class="breadcrumb-item">
-              <a i18n [routerLink]="['/resources', 'personal-finance-tools']"
+              <a i18n [routerLink]="routerLinkResourcesPersonalFinanceTools"
                 >Personal Finance Tools</a
               >
             </li>
@@ -288,7 +312,7 @@
               aria-current="page"
               class="active breadcrumb-item text-truncate"
             >
-              {{ product2.name }}
+              Ghostfolio vs {{ product2.name }}
             </li>
           </ol>
         </nav>

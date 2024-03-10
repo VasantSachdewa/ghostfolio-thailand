@@ -4,6 +4,7 @@ import { IDataGatheringItem } from '@ghostfolio/api/services/interfaces/interfac
 import { PrismaService } from '@ghostfolio/api/services/prisma/prisma.service';
 import { resetHours } from '@ghostfolio/common/helper';
 import { UniqueAsset } from '@ghostfolio/common/interfaces';
+
 import { Injectable } from '@nestjs/common';
 import {
   DataSource,
@@ -39,28 +40,32 @@ export class MarketDataService {
     });
   }
 
-  public async getMax({ dataSource, symbol }: UniqueAsset): Promise<number> {
-    const aggregations = await this.prismaService.marketData.aggregate({
-      _max: {
+  public async getMax({ dataSource, symbol }: UniqueAsset) {
+    return this.prismaService.marketData.findFirst({
+      select: {
+        date: true,
         marketPrice: true
       },
+      orderBy: [
+        {
+          marketPrice: 'desc'
+        }
+      ],
       where: {
         dataSource,
         symbol
       }
     });
-
-    return aggregations._max.marketPrice;
   }
 
   public async getRange({
     dateQuery,
-    symbols
+    uniqueAssets
   }: {
     dateQuery: DateQuery;
-    symbols: string[];
+    uniqueAssets: UniqueAsset[];
   }): Promise<MarketData[]> {
-    return await this.prismaService.marketData.findMany({
+    return this.prismaService.marketData.findMany({
       orderBy: [
         {
           date: 'asc'
@@ -70,24 +75,33 @@ export class MarketDataService {
         }
       ],
       where: {
+        dataSource: {
+          in: uniqueAssets.map(({ dataSource }) => {
+            return dataSource;
+          })
+        },
         date: dateQuery,
         symbol: {
-          in: symbols
+          in: uniqueAssets.map(({ symbol }) => {
+            return symbol;
+          })
         }
       }
     });
   }
 
   public async marketDataItems(params: {
+    select?: Prisma.MarketDataSelectScalar;
     skip?: number;
     take?: number;
     cursor?: Prisma.MarketDataWhereUniqueInput;
     where?: Prisma.MarketDataWhereInput;
     orderBy?: Prisma.MarketDataOrderByWithRelationInput;
   }): Promise<MarketData[]> {
-    const { skip, take, cursor, where, orderBy } = params;
+    const { select, skip, take, cursor, where, orderBy } = params;
 
     return this.prismaService.marketData.findMany({
+      select,
       cursor,
       orderBy,
       skip,

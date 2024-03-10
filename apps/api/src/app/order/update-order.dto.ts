@@ -8,12 +8,13 @@ import {
 import { Transform, TransformFnParams } from 'class-transformer';
 import {
   IsArray,
-  IsBoolean,
   IsEnum,
+  IsISO4217CurrencyCode,
   IsISO8601,
   IsNumber,
   IsOptional,
-  IsString
+  IsString,
+  Min
 } from 'class-validator';
 import { isString } from 'lodash';
 
@@ -37,7 +38,7 @@ export class UpdateOrderDto {
   )
   comment?: string;
 
-  @IsString()
+  @IsISO4217CurrencyCode()
   currency: string;
 
   @IsString()
@@ -47,12 +48,14 @@ export class UpdateOrderDto {
   date: string;
 
   @IsNumber()
+  @Min(0)
   fee: number;
 
   @IsString()
   id: string;
 
   @IsNumber()
+  @Min(0)
   quantity: number;
 
   @IsString()
@@ -66,5 +69,6 @@ export class UpdateOrderDto {
   type: Type;
 
   @IsNumber()
+  @Min(0)
   unitPrice: number;
 }

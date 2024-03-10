@@ -1,7 +1,6 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { Injectable } from '@angular/core';
 import { CreateAccessDto } from '@ghostfolio/api/app/access/create-access.dto';
 import { CreateAccountDto } from '@ghostfolio/api/app/account/create-account.dto';
+import { TransferBalanceDto } from '@ghostfolio/api/app/account/transfer-balance.dto';
 import { UpdateAccountDto } from '@ghostfolio/api/app/account/update-account.dto';
 import { CreateOrderDto } from '@ghostfolio/api/app/order/create-order.dto';
 import { Activities } from '@ghostfolio/api/app/order/interfaces/activities.interface';
@@ -17,6 +16,7 @@ import { PropertyDto } from '@ghostfolio/api/services/property/property.dto';
 import { DATE_FORMAT } from '@ghostfolio/common/helper';
 import {
   Access,
+  AccountBalancesResponse,
   Accounts,
   BenchmarkMarketDataDetails,
   BenchmarkResponse,
@@ -27,6 +27,7 @@ import {
   OAuthResponse,
   PortfolioDetails,
   PortfolioDividends,
+  PortfolioHoldingsResponse,
   PortfolioInvestments,
   PortfolioPerformanceResponse,
   PortfolioPublicDetails,
@@ -37,6 +38,10 @@ import {
 import { filterGlobalPermissions } from '@ghostfolio/common/permissions';
 import { AccountWithValue, DateRange, GroupBy } from '@ghostfolio/common/types';
 import { translate } from '@ghostfolio/ui/i18n';
+
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Injectable } from '@angular/core';
+import { SortDirection } from '@angular/material/sort';
 import { DataSource, Order as OrderModel } from '@prisma/client';
 import { format, parseISO } from 'date-fns';
 import { cloneDeep, groupBy, isNumber } from 'lodash';
@@ -57,6 +62,8 @@ export class DataService {
         ACCOUNT: filtersByAccount,
         ASSET_CLASS: filtersByAssetClass,
         ASSET_SUB_CLASS: filtersByAssetSubClass,
+        PRESET_ID: filtersByPresetId,
+        SEARCH_QUERY: filtersBySearchQuery,
         TAG: filtersByTag
       } = groupBy(filters, (filter) => {
         return filter.type;
@@ -95,6 +102,14 @@ export class DataService {
         );
       }
 
+      if (filtersByPresetId) {
+        params = params.append('presetId', filtersByPresetId[0].id);
+      }
+
+      if (filtersBySearchQuery) {
+        params = params.append('query', filtersBySearchQuery[0].id);
+      }
+
       if (filtersByTag) {
         params = params.append(
           'tags',
@@ -127,28 +142,56 @@ export class DataService {
     return this.http.get<AccountWithValue>(`/api/v1/account/${aAccountId}`);
   }
 
+  public fetchAccountBalances(aAccountId: string) {
+    return this.http.get<AccountBalancesResponse>(
+      `/api/v1/account/${aAccountId}/balances`
+    );
+  }
+
   public fetchAccounts() {
     return this.http.get<Accounts>('/api/v1/account');
   }
 
   public fetchActivities({
-    filters
+    filters,
+    skip,
+    sortColumn,
+    sortDirection,
+    take
   }: {
     filters?: Filter[];
+    skip?: number;
+    sortColumn?: string;
+    sortDirection?: SortDirection;
+    take?: number;
   }): Observable<Activities> {
-    return this.http
-      .get<any>('/api/v1/order', {
-        params: this.buildFiltersAsQueryParams({ filters })
+    let params = this.buildFiltersAsQueryParams({ filters });
+
+    if (skip) {
+      params = params.append('skip', skip);
+    }
+
+    if (sortColumn) {
+      params = params.append('sortColumn', sortColumn);
+    }
+
+    if (sortDirection) {
+      params = params.append('sortDirection', sortDirection);
+    }
+
+    if (take) {
+      params = params.append('take', take);
+    }
+
+    return this.http.get<any>('/api/v1/order', { params }).pipe(
+      map(({ activities, count }) => {
+        for (const activity of activities) {
+          activity.createdAt = parseISO(activity.createdAt);
+          activity.date = parseISO(activity.date);
+        }
+        return { activities, count };
       })
-      .pipe(
-        map(({ activities }) => {
-          for (const activity of activities) {
-            activity.createdAt = parseISO(activity.createdAt);
-            activity.date = parseISO(activity.date);
-          }
-          return { activities };
-        })
-      );
+    );
   }
 
   public fetchDividends({
@@ -195,8 +238,16 @@ export class DataService {
     return this.http.delete<any>(`/api/v1/account/${aId}`);
   }
 
+  public deleteAccountBalance(aId: string) {
+    return this.http.delete<any>(`/api/v1/account-balance/${aId}`);
+  }
+
   public deleteAllOrders() {
     return this.http.delete<any>(`/api/v1/order/`);
+  }
+
+  public deleteBenchmark({ dataSource, symbol }: UniqueAsset) {
+    return this.http.delete<any>(`/api/v1/benchmark/${dataSource}/${symbol}`);
   }
 
   public deleteOrder(aId: string) {
@@ -230,8 +281,14 @@ export class DataService {
     return this.http.get<BenchmarkResponse>('/api/v1/benchmark');
   }
 
-  public fetchExport(activityIds?: string[]) {
-    let params = new HttpParams();
+  public fetchExport({
+    activityIds,
+    filters
+  }: {
+    activityIds?: string[];
+    filters?: Filter[];
+  } = {}) {
+    let params = this.buildFiltersAsQueryParams({ filters });
 
     if (activityIds) {
       params = params.append('activityIds', activityIds.join(','));
@@ -336,7 +393,7 @@ export class DataService {
     filters
   }: {
     filters?: Filter[];
-  }): Observable<PortfolioDetails> {
+  } = {}): Observable<PortfolioDetails> {
     return this.http
       .get<any>('/api/v1/portfolio/details', {
         params: this.buildFiltersAsQueryParams({ filters })
@@ -351,11 +408,51 @@ export class DataService {
 
           if (response.holdings) {
             for (const symbol of Object.keys(response.holdings)) {
-              response.holdings[symbol].assetClass = translate(
+              response.holdings[symbol].assetClassLabel = translate(
                 response.holdings[symbol].assetClass
               );
 
-              response.holdings[symbol].assetSubClass = translate(
+              response.holdings[symbol].assetSubClassLabel = translate(
+                response.holdings[symbol].assetSubClass
+              );
+
+              response.holdings[symbol].dateOfFirstActivity = response.holdings[
+                symbol
+              ].dateOfFirstActivity
+                ? parseISO(response.holdings[symbol].dateOfFirstActivity)
+                : undefined;
+
+              response.holdings[symbol].value = isNumber(
+                response.holdings[symbol].value
+              )
+                ? response.holdings[symbol].value
+                : response.holdings[symbol].valueInPercentage;
+            }
+          }
+
+          return response;
+        })
+      );
+  }
+
+  public fetchPortfolioHoldings({
+    filters
+  }: {
+    filters?: Filter[];
+  } = {}) {
+    return this.http
+      .get<PortfolioHoldingsResponse>('/api/v1/portfolio/holdings', {
+        params: this.buildFiltersAsQueryParams({ filters })
+      })
+      .pipe(
+        map((response) => {
+          if (response.holdings) {
+            for (const symbol of Object.keys(response.holdings)) {
+              response.holdings[symbol].assetClassLabel = translate(
+                response.holdings[symbol].assetClass
+              );
+
+              response.holdings[symbol].assetSubClassLabel = translate(
                 response.holdings[symbol].assetSubClass
               );
 
@@ -380,13 +477,25 @@ export class DataService {
 
   public fetchPortfolioPerformance({
     filters,
-    range
+    range,
+    withExcludedAccounts = false,
+    withItems = false
   }: {
     filters?: Filter[];
     range: DateRange;
+    withExcludedAccounts?: boolean;
+    withItems?: boolean;
   }): Observable<PortfolioPerformanceResponse> {
     let params = this.buildFiltersAsQueryParams({ filters });
     params = params.append('range', range);
+
+    if (withExcludedAccounts) {
+      params = params.append('withExcludedAccounts', withExcludedAccounts);
+    }
+
+    if (withItems) {
+      params = params.append('withItems', withItems);
+    }
 
     return this.http
       .get<any>(`/api/v2/portfolio/performance`, {
@@ -410,10 +519,10 @@ export class DataService {
         map((response) => {
           if (response.holdings) {
             for (const symbol of Object.keys(response.holdings)) {
-              response.holdings[symbol].value = isNumber(
-                response.holdings[symbol].value
+              response.holdings[symbol].valueInBaseCurrency = isNumber(
+                response.holdings[symbol].valueInBaseCurrency
               )
-                ? response.holdings[symbol].value
+                ? response.holdings[symbol].valueInBaseCurrency
                 : response.holdings[symbol].valueInPercentage;
             }
           }
@@ -497,6 +606,33 @@ export class DataService {
   public redeemCoupon(couponCode: string) {
     return this.http.post('/api/v1/subscription/redeem-coupon', {
       couponCode
+    });
+  }
+
+  public transferAccountBalance({
+    accountIdFrom,
+    accountIdTo,
+    balance
+  }: TransferBalanceDto) {
+    return this.http.post('/api/v1/account/transfer-balance', {
+      accountIdFrom,
+      accountIdTo,
+      balance
+    });
+  }
+
+  public updateInfo() {
+    this.http.get<InfoItem>('/api/v1/info').subscribe((info) => {
+      const utmSource = <'ios' | 'trusted-web-activity'>(
+        window.localStorage.getItem('utm_source')
+      );
+
+      info.globalPermissions = filterGlobalPermissions(
+        info.globalPermissions,
+        utmSource
+      );
+
+      (window as any).info = info;
     });
   }
 }

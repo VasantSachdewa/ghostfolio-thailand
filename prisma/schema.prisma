@@ -11,33 +11,56 @@ datasource db {
 
 model Access {
   alias         String?
-  createdAt     DateTime @default(now())
+  createdAt     DateTime           @default(now())
   granteeUserId String?
-  id            String   @id @default(uuid())
-  updatedAt     DateTime @updatedAt
+  id            String             @id @default(uuid())
+  permissions   AccessPermission[] @default([READ_RESTRICTED])
+  updatedAt     DateTime           @updatedAt
   userId        String
-  GranteeUser   User?    @relation("accessGet", fields: [granteeUserId], references: [id])
-  User          User     @relation("accessGive", fields: [userId], references: [id])
+  GranteeUser   User?              @relation("accessGet", fields: [granteeUserId], references: [id])
+  User          User               @relation("accessGive", fields: [userId], references: [id])
+
+  @@index([alias])
+  @@index([granteeUserId])
+  @@index([userId])
 }
 
 model Account {
-  accountType AccountType @default(SECURITIES)
-  balance     Float       @default(0)
-  comment     String?
-  createdAt   DateTime    @default(now())
-  currency    String?
-  id          String      @default(uuid())
-  isDefault   Boolean     @default(false)
-  isExcluded  Boolean     @default(false)
-  name        String?
-  platformId  String?
-  updatedAt   DateTime    @updatedAt
-  userId      String
-  Platform    Platform?   @relation(fields: [platformId], references: [id])
-  User        User        @relation(fields: [userId], references: [id])
-  Order       Order[]
+  balance    Float            @default(0)
+  balances   AccountBalance[]
+  comment    String?
+  createdAt  DateTime         @default(now())
+  currency   String?
+  id         String           @default(uuid())
+  isExcluded Boolean          @default(false)
+  name       String?
+  platformId String?
+  updatedAt  DateTime         @updatedAt
+  userId     String
+  Platform   Platform?        @relation(fields: [platformId], references: [id])
+  User       User             @relation(fields: [userId], references: [id])
+  Order      Order[]
 
   @@id([id, userId])
+  @@index([currency])
+  @@index([id])
+  @@index([isExcluded])
+  @@index([name])
+  @@index([userId])
+}
+
+model AccountBalance {
+  accountId String
+  createdAt DateTime @default(now())
+  date      DateTime @default(now())
+  id        String   @id @default(uuid())
+  updatedAt DateTime @updatedAt
+  userId    String
+  value     Float
+  Account   Account  @relation(fields: [accountId, userId], onDelete: Cascade, references: [id, userId])
+
+  @@index([accountId])
+  @@index([date])
 }
 
 model Analytics {
@@ -46,6 +69,8 @@ model Analytics {
   updatedAt     DateTime @updatedAt
   userId        String   @id
   User          User     @relation(fields: [userId], references: [id])
+
+  @@index([updatedAt])
 }
 
 model AuthDevice {
@@ -57,6 +82,8 @@ model AuthDevice {
   updatedAt           DateTime @updatedAt
   userId              String
   User                User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
 }
 
 model MarketData {
@@ -69,6 +96,10 @@ model MarketData {
   symbol      String
 
   @@unique([dataSource, date, symbol])
+  @@index([dataSource])
+  @@index([date])
+  @@index([marketPrice])
+  @@index([state])
   @@index([symbol])
 }
 
@@ -91,6 +122,11 @@ model Order {
   SymbolProfile   SymbolProfile @relation(fields: [symbolProfileId], references: [id])
   User            User          @relation(fields: [userId], references: [id])
   tags            Tag[]
+
+  @@index([accountId])
+  @@index([date])
+  @@index([isDraft])
+  @@index([userId])
 }
 
 model Platform {
@@ -98,6 +134,8 @@ model Platform {
   name    String?
   url     String    @unique
   Account Account[]
+
+  @@index([name])
 }
 
 model Property {
@@ -120,6 +158,9 @@ model SymbolProfile {
   createdAt              DateTime                @default(now())
   currency               String
   dataSource             DataSource
+  figi                   String?
+  figiComposite          String?
+  figiShareClass         String?
   id                     String                  @id @default(uuid())
   isin                   String?
   name                   String?
@@ -133,6 +174,12 @@ model SymbolProfile {
   SymbolProfileOverrides SymbolProfileOverrides?
 
   @@unique([dataSource, symbol])
+  @@index([assetClass])
+  @@index([currency])
+  @@index([dataSource])
+  @@index([isin])
+  @@index([name])
+  @@index([symbol])
 }
 
 model SymbolProfileOverrides {
@@ -155,12 +202,16 @@ model Subscription {
   updatedAt DateTime @updatedAt
   userId    String
   User      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
 }
 
 model Tag {
   id     String  @id @default(uuid())
   name   String  @unique
   orders Order[]
+
+  @@index([name])
 }
 
 model User {
@@ -180,11 +231,17 @@ model User {
   Order         Order[]
   Settings      Settings?
   Subscription  Subscription[]
+
+  @@index([accessToken])
+  @@index([createdAt])
+  @@index([provider])
+  @@index([role])
+  @@index([thirdPartyId])
 }
 
-enum AccountType {
-  CASH
-  SECURITIES
+enum AccessPermission {
+  READ
+  READ_RESTRICTED
 }
 
 enum AssetClass {
@@ -232,12 +289,15 @@ enum Provider {
 enum Role {
   ADMIN
   DEMO
+  INACTIVE
   USER
 }
 
 enum Type {
   BUY
   DIVIDEND
+  FEE
+  INTEREST
   ITEM
   LIABILITY
   SELL

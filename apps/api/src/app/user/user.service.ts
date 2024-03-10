@@ -1,28 +1,39 @@
 import { SubscriptionService } from '@ghostfolio/api/app/subscription/subscription.service';
 import { environment } from '@ghostfolio/api/environments/environment';
 import { ConfigurationService } from '@ghostfolio/api/services/configuration/configuration.service';
+import { I18nService } from '@ghostfolio/api/services/i18n/i18n.service';
 import { PrismaService } from '@ghostfolio/api/services/prisma/prisma.service';
 import { PropertyService } from '@ghostfolio/api/services/property/property.service';
 import { TagService } from '@ghostfolio/api/services/tag/tag.service';
-import { PROPERTY_IS_READ_ONLY_MODE, locale } from '@ghostfolio/common/config';
-import { User as IUser, UserSettings } from '@ghostfolio/common/interfaces';
+import {
+  DEFAULT_CURRENCY,
+  DEFAULT_LANGUAGE_CODE,
+  PROPERTY_IS_READ_ONLY_MODE,
+  PROPERTY_SYSTEM_MESSAGE,
+  locale
+} from '@ghostfolio/common/config';
+import {
+  User as IUser,
+  SystemMessage,
+  UserSettings
+} from '@ghostfolio/common/interfaces';
 import {
   getPermissions,
   hasRole,
   permissions
 } from '@ghostfolio/common/permissions';
 import { UserWithSettings } from '@ghostfolio/common/types';
+
 import { Injectable } from '@nestjs/common';
 import { Prisma, Role, User } from '@prisma/client';
-import { sortBy } from 'lodash';
+import { differenceInDays } from 'date-fns';
+import { sortBy, without } from 'lodash';
 
 const crypto = require('crypto');
 
 @Injectable()
 export class UserService {
-  public static DEFAULT_CURRENCY = 'USD';
-
-  private baseCurrency: string;
+  private i18nService = new I18nService();
 
   public constructor(
     private readonly configurationService: ConfigurationService,
@@ -30,8 +41,10 @@ export class UserService {
     private readonly propertyService: PropertyService,
     private readonly subscriptionService: SubscriptionService,
     private readonly tagService: TagService
-  ) {
-    this.baseCurrency = this.configurationService.get('BASE_CURRENCY');
+  ) {}
+
+  public async count(args?: Prisma.UserCountArgs) {
+    return this.prismaService.user.count(args);
   }
 
   public async getUser(
@@ -45,6 +58,17 @@ export class UserService {
       orderBy: { alias: 'asc' },
       where: { GranteeUser: { id } }
     });
+
+    let systemMessage: SystemMessage;
+
+    const systemMessageProperty = (await this.propertyService.getByKey(
+      PROPERTY_SYSTEM_MESSAGE
+    )) as SystemMessage;
+
+    if (systemMessageProperty?.targetGroups?.includes(subscription?.type)) {
+      systemMessage = systemMessageProperty;
+    }
+
     let tags = await this.tagService.getByUser(id);
 
     if (
@@ -58,6 +82,7 @@ export class UserService {
       id,
       permissions,
       subscription,
+      systemMessage,
       tags,
       access: access.map((accessItem) => {
         return {
@@ -85,6 +110,24 @@ export class UserService {
     return usersWithAdminRole.length > 0;
   }
 
+  public hasReadRestrictedAccessPermission({
+    impersonationId,
+    user
+  }: {
+    impersonationId: string;
+    user: UserWithSettings;
+  }) {
+    if (!impersonationId) {
+      return false;
+    }
+
+    const access = user.Access?.find(({ id }) => {
+      return id === impersonationId;
+    });
+
+    return access?.permissions?.includes('READ_RESTRICTED') ?? true;
+  }
+
   public isRestrictedView(aUser: UserWithSettings) {
     return aUser.Settings.settings.isRestrictedView ?? false;
   }
@@ -93,6 +136,7 @@ export class UserService {
     userWhereUniqueInput: Prisma.UserWhereUniqueInput
   ): Promise<UserWithSettings | null> {
     const {
+      Access,
       accessToken,
       Account,
       Analytics,
@@ -107,7 +151,10 @@ export class UserService {
       updatedAt
     } = await this.prismaService.user.findUnique({
       include: {
-        Account: true,
+        Access: true,
+        Account: {
+          include: { Platform: true }
+        },
         Analytics: true,
         Settings: true,
         Subscription: true
@@ -116,6 +163,7 @@ export class UserService {
     });
 
     const user: UserWithSettings = {
+      Access,
       accessToken,
       Account,
       authChallenge,
@@ -123,7 +171,7 @@ export class UserService {
       id,
       provider,
       role,
-      Settings,
+      Settings: Settings as UserWithSettings['Settings'],
       thirdPartyId,
       updatedAt,
       activityCount: Analytics?.activityCount
@@ -144,8 +192,7 @@ export class UserService {
 
     // Set default value for base currency
     if (!(user.Settings.settings as UserSettings)?.baseCurrency) {
-      (user.Settings.settings as UserSettings).baseCurrency =
-        UserService.DEFAULT_CURRENCY;
+      (user.Settings.settings as UserSettings).baseCurrency = DEFAULT_CURRENCY;
     }
 
     // Set default value for date range
@@ -161,15 +208,49 @@ export class UserService {
 
     let currentPermissions = getPermissions(user.role);
 
-    if (this.configurationService.get('ENABLE_FEATURE_SUBSCRIPTION')) {
-      user.subscription =
-        this.subscriptionService.getSubscription(Subscription);
+    if (!(user.Settings.settings as UserSettings).isExperimentalFeatures) {
+      // currentPermissions = without(
+      //   currentPermissions,
+      //   permissions.xyz
+      // );
+    }
 
-      if (
-        Analytics?.activityCount % 10 === 0 &&
-        user.subscription?.type === 'Basic'
-      ) {
-        currentPermissions.push(permissions.enableSubscriptionInterstitial);
+    if (this.configurationService.get('ENABLE_FEATURE_SUBSCRIPTION')) {
+      user.subscription = this.subscriptionService.getSubscription({
+        createdAt: user.createdAt,
+        subscriptions: Subscription
+      });
+
+      if (user.subscription?.type === 'Basic') {
+        const daysSinceRegistration = differenceInDays(
+          new Date(),
+          user.createdAt
+        );
+        let frequency = 10;
+
+        if (daysSinceRegistration > 365) {
+          frequency = 2;
+        } else if (daysSinceRegistration > 180) {
+          frequency = 3;
+        } else if (daysSinceRegistration > 60) {
+          frequency = 4;
+        } else if (daysSinceRegistration > 30) {
+          frequency = 6;
+        } else if (daysSinceRegistration > 15) {
+          frequency = 8;
+        }
+
+        if (Analytics?.activityCount % frequency === 1) {
+          currentPermissions.push(permissions.enableSubscriptionInterstitial);
+        }
+
+        currentPermissions = without(
+          currentPermissions,
+          permissions.createAccess
+        );
+
+        // Reset benchmark
+        user.Settings.settings.benchmark = undefined;
       }
 
       if (user.subscription?.type === 'Premium') {
@@ -201,8 +282,8 @@ export class UserService {
       currentPermissions.push(permissions.impersonateAllUsers);
     }
 
-    user.Account = sortBy(user.Account, (account) => {
-      return account.name;
+    user.Account = sortBy(user.Account, ({ name }) => {
+      return name.toLowerCase();
     });
     user.permissions = currentPermissions.sort();
 
@@ -247,15 +328,17 @@ export class UserService {
         ...data,
         Account: {
           create: {
-            currency: this.baseCurrency,
-            isDefault: true,
-            name: 'Default Account'
+            currency: DEFAULT_CURRENCY,
+            name: this.i18nService.getTranslation({
+              id: 'myAccount',
+              languageCode: DEFAULT_LANGUAGE_CODE // TODO
+            })
           }
         },
         Settings: {
           create: {
             settings: {
-              currency: this.baseCurrency
+              currency: DEFAULT_CURRENCY
             }
           }
         }
@@ -361,7 +444,7 @@ export class UserService {
         settings
       },
       where: {
-        userId: userId
+        userId
       }
     });
 

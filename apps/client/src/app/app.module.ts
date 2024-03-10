@@ -1,6 +1,8 @@
+import { GfLogoModule } from '@ghostfolio/ui/logo';
+
 import { Platform } from '@angular/cdk/platform';
 import { HttpClientModule } from '@angular/common/http';
-import { NgModule } from '@angular/core';
+import { CUSTOM_ELEMENTS_SCHEMA, NgModule } from '@angular/core';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatChipsModule } from '@angular/material/chips';
 import {
@@ -14,7 +16,6 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { BrowserModule } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { ServiceWorkerModule } from '@angular/service-worker';
-import { GfLogoModule } from '@ghostfolio/ui/logo';
 import { MarkdownModule } from 'ngx-markdown';
 import { NgxSkeletonLoaderModule } from 'ngx-skeleton-loader';
 import { NgxStripeModule, STRIPE_PUBLISHABLE_KEY } from 'ngx-stripe';
@@ -35,6 +36,7 @@ export function NgxStripeFactory(): string {
 }
 
 @NgModule({
+  bootstrap: [AppComponent],
   declarations: [AppComponent],
   imports: [
     AppRoutingModule,
@@ -72,6 +74,6 @@ export function NgxStripeFactory(): string {
       useFactory: NgxStripeFactory
     }
   ],
-  bootstrap: [AppComponent]
+  schemas: [CUSTOM_ELEMENTS_SCHEMA]
 })
 export class AppModule {}

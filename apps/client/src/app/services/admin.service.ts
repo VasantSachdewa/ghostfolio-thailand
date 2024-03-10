@@ -1,9 +1,9 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { Injectable } from '@angular/core';
 import { UpdateAssetProfileDto } from '@ghostfolio/api/app/admin/update-asset-profile.dto';
-import { UpdateMarketDataDto } from '@ghostfolio/api/app/admin/update-market-data.dto';
+import { UpdateBulkMarketDataDto } from '@ghostfolio/api/app/admin/update-bulk-market-data.dto';
 import { CreatePlatformDto } from '@ghostfolio/api/app/platform/create-platform.dto';
 import { UpdatePlatformDto } from '@ghostfolio/api/app/platform/update-platform.dto';
+import { CreateTagDto } from '@ghostfolio/api/app/tag/create-tag.dto';
+import { UpdateTagDto } from '@ghostfolio/api/app/tag/update-tag.dto';
 import { IDataProviderHistoricalResponse } from '@ghostfolio/api/services/interfaces/interfaces';
 import { DATE_FORMAT } from '@ghostfolio/common/helper';
 import {
@@ -15,7 +15,11 @@ import {
   Filter,
   UniqueAsset
 } from '@ghostfolio/common/interfaces';
-import { DataSource, MarketData, Platform, Prisma } from '@prisma/client';
+
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Injectable } from '@angular/core';
+import { SortDirection } from '@angular/material/sort';
+import { DataSource, MarketData, Platform, Tag } from '@prisma/client';
 import { JobStatus } from 'bull';
 import { format, parseISO } from 'date-fns';
 import { Observable, map } from 'rxjs';
@@ -64,6 +68,10 @@ export class AdminService {
     );
   }
 
+  public deleteTag(aId: string) {
+    return this.http.delete<void>(`/api/v1/tag/${aId}`);
+  }
+
   public fetchAdminData() {
     return this.http.get<AdminData>('/api/v1/admin');
   }
@@ -78,7 +86,7 @@ export class AdminService {
     filters?: Filter[];
     skip?: number;
     sortColumn?: string;
-    sortDirection?: Prisma.SortOrder;
+    sortDirection?: SortDirection;
     take: number;
   }) {
     let params = this.dataService.buildFiltersAsQueryParams({ filters });
@@ -95,7 +103,9 @@ export class AdminService {
       params = params.append('sortDirection', sortDirection);
     }
 
-    params = params.append('take', take);
+    if (take) {
+      params = params.append('take', take);
+    }
 
     return this.http.get<AdminMarketData>('/api/v1/admin/market-data', {
       params
@@ -135,6 +145,10 @@ export class AdminService {
 
   public fetchPlatforms() {
     return this.http.get<Platform[]>('/api/v1/platform');
+  }
+
+  public fetchTags() {
+    return this.http.get<Tag[]>('/api/v1/tag');
   }
 
   public gather7Days() {
@@ -190,45 +204,77 @@ export class AdminService {
   }
 
   public patchAssetProfile({
+    assetClass,
+    assetSubClass,
     comment,
+    countries,
+    currency,
     dataSource,
+    name,
     scraperConfiguration,
+    sectors,
     symbol,
     symbolMapping
   }: UniqueAsset & UpdateAssetProfileDto) {
     return this.http.patch<EnhancedSymbolProfile>(
       `/api/v1/admin/profile-data/${dataSource}/${symbol}`,
-      { comment, scraperConfiguration, symbolMapping }
+      {
+        assetClass,
+        assetSubClass,
+        comment,
+        countries,
+        currency,
+        name,
+        scraperConfiguration,
+        sectors,
+        symbolMapping
+      }
     );
+  }
+
+  public postMarketData({
+    dataSource,
+    marketData,
+    symbol
+  }: {
+    dataSource: DataSource;
+    marketData: UpdateBulkMarketDataDto;
+    symbol: string;
+  }) {
+    const url = `/api/v1/admin/market-data/${dataSource}/${symbol}`;
+
+    return this.http.post<MarketData>(url, marketData);
   }
 
   public postPlatform(aPlatform: CreatePlatformDto) {
     return this.http.post<Platform>(`/api/v1/platform`, aPlatform);
   }
 
-  public putMarketData({
-    dataSource,
-    date,
-    marketData,
-    symbol
-  }: {
-    dataSource: DataSource;
-    date: Date;
-    marketData: UpdateMarketDataDto;
-    symbol: string;
-  }) {
-    const url = `/api/v1/admin/market-data/${dataSource}/${symbol}/${format(
-      date,
-      DATE_FORMAT
-    )}`;
-
-    return this.http.put<MarketData>(url, marketData);
+  public postTag(aTag: CreateTagDto) {
+    return this.http.post<Tag>(`/api/v1/tag`, aTag);
   }
 
   public putPlatform(aPlatform: UpdatePlatformDto) {
     return this.http.put<Platform>(
       `/api/v1/platform/${aPlatform.id}`,
       aPlatform
+    );
+  }
+
+  public putTag(aTag: UpdateTagDto) {
+    return this.http.put<Tag>(`/api/v1/tag/${aTag.id}`, aTag);
+  }
+
+  public testMarketData({
+    dataSource,
+    scraperConfiguration,
+    symbol
+  }: UniqueAsset & UpdateAssetProfileDto['scraperConfiguration']) {
+    return this.http.post<any>(
+      `/api/v1/admin/market-data/${dataSource}/${symbol}/test`,
+      {
+        scraperConfiguration
+      }
     );
   }
 }
